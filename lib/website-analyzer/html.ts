@@ -13,6 +13,8 @@ import type {
   PageFacts,
 } from "@/lib/website-analyzer/types";
 
+const BODY_TEXT_SAMPLE_LIMIT = 4_000;
+
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -282,5 +284,6 @@ export function extractPageFacts(html: string): PageFacts {
     iframeCount: $("iframe").length,
     bodyTextCharacterCount: bodyText.length,
     bodyTextWordCount: wordCount(bodyText),
+    bodyTextSample: bodyText.slice(0, BODY_TEXT_SAMPLE_LIMIT),
   };
 }
