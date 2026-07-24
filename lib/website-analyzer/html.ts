@@ -4,6 +4,7 @@ import { load, type CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import type {
+  ActiveResourceReference,
   ButtonFact,
   FormControlFact,
   FormFact,
@@ -12,8 +13,6 @@ import type {
   LinkFact,
   PageFacts,
 } from "@/lib/website-analyzer/types";
-
-const BODY_TEXT_SAMPLE_LIMIT = 4_000;
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -211,6 +210,34 @@ function extractForms($: CheerioAPI): FormFact[] {
   return forms;
 }
 
+function extractActiveResourceReferences($: CheerioAPI): ActiveResourceReference[] {
+  const resources: ActiveResourceReference[] = [];
+  const add = (
+    selector: string,
+    tag: ActiveResourceReference["tag"],
+    attribute: ActiveResourceReference["attribute"],
+  ) => {
+    $(selector).each((_, element) => {
+      const url = nullableAttribute($(element).attr(attribute));
+      if (url) resources.push({ tag, attribute, url });
+    });
+  };
+
+  add("script[src]", "script", "src");
+  $("link[href]").each((_, element) => {
+    const node = $(element);
+    if (!splitTokens(node.attr("rel")).includes("stylesheet")) return;
+    const url = nullableAttribute(node.attr("href"));
+    if (url) resources.push({ tag: "link", attribute: "href", url });
+  });
+  add("iframe[src]", "iframe", "src");
+  add("object[data]", "object", "data");
+  add("embed[src]", "embed", "src");
+  add("form[action]", "form", "action");
+
+  return resources;
+}
+
 function extractJsonLdBlocks($: CheerioAPI): string[] {
   const blocks: string[] = [];
 
@@ -278,12 +305,13 @@ export function extractPageFacts(html: string): PageFacts {
       footerCount: $("footer").length,
       asideCount: $("aside").length,
     },
+    activeResourceReferences: extractActiveResourceReferences($),
     jsonLdBlocks,
     jsonLdBlockCount: jsonLdBlocks.length,
     scriptCount: $("script").length,
     iframeCount: $("iframe").length,
     bodyTextCharacterCount: bodyText.length,
     bodyTextWordCount: wordCount(bodyText),
-    bodyTextSample: bodyText.slice(0, BODY_TEXT_SAMPLE_LIMIT),
+    bodyTextSample: bodyText.slice(0, 20_000),
   };
 }
