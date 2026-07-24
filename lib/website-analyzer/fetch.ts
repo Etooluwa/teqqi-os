@@ -66,7 +66,7 @@ async function fetchOnce(url: string): Promise<Response> {
       },
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError") {
       throw new WebsiteAnalyzerError("FETCH_TIMEOUT", "Website request timed out.", 504);
     }
     throw new WebsiteAnalyzerError("FETCH_NETWORK_ERROR", "Website request could not be completed.", 502);
