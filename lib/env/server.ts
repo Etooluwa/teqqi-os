@@ -10,10 +10,15 @@ function requireServerEnv(name: string): string {
   return value;
 }
 
-export function getServerEnv() {
+export function getSupabaseEnv() {
   return {
     supabaseUrl: requireServerEnv("SUPABASE_URL").replace(/\/$/, ""),
     supabaseSecretKey: requireServerEnv("SUPABASE_SECRET_KEY"),
+  } as const;
+}
+
+export function getGooglePlacesEnv() {
+  return {
     googlePlacesApiKey: requireServerEnv("GOOGLE_PLACES_API_KEY"),
   } as const;
 }
