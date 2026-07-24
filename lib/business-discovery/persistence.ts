@@ -28,6 +28,14 @@ function normalizeSearchValue(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+export async function getPreviouslyDiscoveredPlaceIds(): Promise<Set<string>> {
+  const rows = await supabaseRest<Array<{ external_id: string }>>(
+    "/search_place_results?provider=eq.GOOGLE_PLACES&select=external_id",
+  );
+
+  return new Set(rows.map((row) => row.external_id));
+}
+
 export async function createSearchExecution(
   input: BusinessSearchInput,
   query: string,
@@ -46,16 +54,13 @@ export async function createSearchExecution(
         requested_max_results: input.maxResults,
         source: "GOOGLE_PLACES",
         status: "RUNNING",
-        discovery_version: "1.0.0",
+        discovery_version: "1.1.0",
       },
     },
   );
 
   const searchId = rows[0]?.id;
-  if (!searchId) {
-    throw new Error("Failed to create search history record.");
-  }
-
+  if (!searchId) throw new Error("Failed to create search history record.");
   return searchId;
 }
 
@@ -89,11 +94,7 @@ export async function finalizeSearchExecution(params: {
   errorCode?: string;
   errorMessage?: string;
 }): Promise<void> {
-  const query = new URLSearchParams({
-    id: `eq.${params.searchId}`,
-    select: "id",
-  });
-
+  const query = new URLSearchParams({ id: `eq.${params.searchId}`, select: "id" });
   await supabaseRest<SearchHistoryRow[]>(`/search_history?${query.toString()}`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
@@ -110,28 +111,18 @@ export async function finalizeSearchExecution(params: {
 export async function getSearchExecution(searchId: string): Promise<SearchHistoryRow | null> {
   const query = new URLSearchParams({
     id: `eq.${searchId}`,
-    select:
-      "id,query_text,industry,location_text,normalized_industry,normalized_location,requested_max_results,source,status,result_count,created_at",
+    select: "id,query_text,industry,location_text,normalized_industry,normalized_location,requested_max_results,source,status,result_count,created_at",
     limit: "1",
   });
-
-  const rows = await supabaseRest<SearchHistoryRow[]>(
-    `/search_history?${query.toString()}`,
-  );
-
+  const rows = await supabaseRest<SearchHistoryRow[]>(`/search_history?${query.toString()}`);
   return rows[0] ?? null;
 }
 
-export async function getSearchPlaceReferences(
-  searchId: string,
-): Promise<SearchPlaceResultRow[]> {
+export async function getSearchPlaceReferences(searchId: string): Promise<SearchPlaceResultRow[]> {
   const query = new URLSearchParams({
     search_id: `eq.${searchId}`,
     select: "search_id,provider,external_id,result_position",
     order: "result_position.asc",
   });
-
-  return supabaseRest<SearchPlaceResultRow[]>(
-    `/search_place_results?${query.toString()}`,
-  );
+  return supabaseRest<SearchPlaceResultRow[]>(`/search_place_results?${query.toString()}`);
 }
