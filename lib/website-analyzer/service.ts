@@ -1,23 +1,26 @@
 import "server-only";
 
-import { createAuditEnvelope } from "@/lib/website-analyzer/audit";
-import type { AnalyzerFoundationResponse } from "@/lib/website-analyzer/types";
+import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
+import { extractPageFacts } from "@/lib/website-analyzer/html";
+import type { AnalyzerFetchParseResponse } from "@/lib/website-analyzer/types";
 import { validateWebsiteUrl } from "@/lib/website-analyzer/url";
 import { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
 
-export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFoundationResponse> {
+export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFetchParseResponse> {
   const target = await validateWebsiteUrl(rawUrl);
-  const audit = createAuditEnvelope({
-    requestedUrl: target.requestedUrl,
-    normalizedUrl: target.normalizedUrl,
-  });
+  const fetchResult = await fetchWebsiteHtml(target);
+  const pageFacts = extractPageFacts(fetchResult.html);
+
+  const { html: _html, ...fetchMetadata } = fetchResult;
 
   return {
     ok: true,
     analyzerVersion: WEBSITE_ANALYZER_VERSION,
-    status: audit.status,
+    status: "RUNNING",
     target,
-    implementationStage: "ANALYZER_FOUNDATION",
-    nextStage: "FETCH_AND_PARSE",
+    fetch: fetchMetadata,
+    pageFacts,
+    implementationStage: "FETCH_AND_PARSE",
+    nextStage: "TECHNICAL_HEALTH_RULES",
   };
 }
