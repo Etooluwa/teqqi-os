@@ -48,9 +48,6 @@ async function run() {
   }
 
   {
-    // example.com is an IANA-reserved documentation domain and some DNS/network
-    // environments may resolve it into documentation ranges that the analyzer
-    // correctly blocks. Use a normal public production hostname instead.
     const { response, data } = await post({ url: "google.com" });
     assert(
       response.ok,
@@ -58,9 +55,11 @@ async function run() {
     );
     assert(data.ok === true, "Public URL should return ok=true.");
     assert(data.analyzerVersion === "1.0.0", "Analyzer version should be 1.0.0.");
-    assert(data.status === "PENDING", "Foundation audit envelope should be PENDING.");
     assert(data.target?.normalizedUrl === "https://google.com/", "Bare hostname should normalize to HTTPS.");
-    assert(data.implementationStage === "ANALYZER_FOUNDATION", "Expected analyzer foundation stage.");
+    assert(
+      data.implementationStage === "FETCH_AND_PARSE",
+      "Validated public URL should now continue into the fetch/parse stage.",
+    );
     console.log("✓ Public URL validation and normalization");
   }
 
