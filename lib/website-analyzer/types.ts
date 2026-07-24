@@ -57,20 +57,95 @@ export type HtmlFetchResult = {
   fetchedAt: string;
 };
 
+export type HeadingFact = {
+  level: 1 | 2 | 3 | 4 | 5 | 6;
+  text: string;
+  id: string | null;
+};
+
+export type LinkFact = {
+  href: string | null;
+  text: string;
+  rel: string[];
+  target: string | null;
+  ariaLabel: string | null;
+  accessibleName: string;
+};
+
+export type ImageFact = {
+  src: string | null;
+  alt: string | null;
+  hasAltAttribute: boolean;
+  width: string | null;
+  height: string | null;
+};
+
+export type ButtonFact = {
+  text: string;
+  type: string | null;
+  ariaLabel: string | null;
+  accessibleName: string;
+};
+
+export type FormControlFact = {
+  tag: "input" | "select" | "textarea" | "button";
+  type: string | null;
+  id: string | null;
+  name: string | null;
+  ariaLabel: string | null;
+  ariaLabelledBy: string | null;
+  placeholder: string | null;
+  hasAssociatedLabel: boolean;
+  accessibleName: string;
+};
+
+export type FormFact = {
+  action: string | null;
+  method: string | null;
+  id: string | null;
+  controls: FormControlFact[];
+  submitControlCount: number;
+};
+
+export type LandmarkFacts = {
+  headerCount: number;
+  navCount: number;
+  mainCount: number;
+  footerCount: number;
+  asideCount: number;
+};
+
 export type PageFacts = {
+  parser: "CHEERIO_PARSE5";
+  document: {
+    hasHtml: boolean;
+    hasHead: boolean;
+    hasBody: boolean;
+  };
   title: string | null;
+  titleCount: number;
   metaDescription: string | null;
+  metaDescriptionCount: number;
+  metaRobots: string | null;
   canonicalUrl: string | null;
+  canonicalCount: number;
   htmlLang: string | null;
   viewportContent: string | null;
+  headings: HeadingFact[];
   h1Texts: string[];
   h2Texts: string[];
   h3Texts: string[];
-  links: Array<{ href: string | null; text: string }>;
-  images: Array<{ src: string | null; alt: string | null }>;
-  buttons: Array<{ text: string }>;
-  forms: Array<{ action: string | null; method: string | null; inputTypes: string[] }>;
+  links: LinkFact[];
+  images: ImageFact[];
+  buttons: ButtonFact[];
+  forms: FormFact[];
+  landmarks: LandmarkFacts;
   jsonLdBlocks: string[];
+  jsonLdBlockCount: number;
+  scriptCount: number;
+  iframeCount: number;
+  bodyTextCharacterCount: number;
+  bodyTextWordCount: number;
 };
 
 export type AnalyzerAuditEnvelope = {
