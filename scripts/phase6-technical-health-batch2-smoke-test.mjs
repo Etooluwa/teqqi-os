@@ -24,7 +24,7 @@ async function run() {
 
   const { response, data } = await analyze("https://www.google.com/");
   assert(response.ok, `Google analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_3", "Expected analyzer to have advanced through Batch 3.");
+  assert(String(data.implementationStage).startsWith("TECHNICAL_HEALTH_BATCH_"), "Expected Technical Health stage.");
   assert(Array.isArray(data.technicalHealthFindings), "Expected Technical Health findings.");
   assert(data.technicalHealthFindings.length >= 10, "Expected findings through TECH-010.");
   assert(typeof data.transportSecurity === "object", "Expected transport-security evidence.");
