@@ -1,9 +1,16 @@
 import "server-only";
 
+import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
 import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { runTechnicalHealthBatch1 } from "@/lib/website-analyzer/technical-health/batch1";
-import type { AnalyzerFetchParseResponse } from "@/lib/website-analyzer/types";
+import { runTechnicalHealthBatch2 } from "@/lib/website-analyzer/technical-health/batch2";
+import { collectTransportSecurityEvidence } from "@/lib/website-analyzer/transport";
+import type {
+  AnalyzerFetchParseResponse,
+  HtmlFetchResult,
+  ValidatedWebsiteTarget,
+} from "@/lib/website-analyzer/types";
 import { validateWebsiteUrl } from "@/lib/website-analyzer/url";
 import { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
 
@@ -21,16 +28,45 @@ function responseAppearsHtml(contentType: string | null, body: string): boolean 
   );
 }
 
+async function fetchHomepageWithHttpFallback(
+  target: ValidatedWebsiteTarget,
+): Promise<HtmlFetchResult> {
+  try {
+    return await fetchWebsiteHtml(target);
+  } catch (error) {
+    const canFallback =
+      target.protocol === "https:" &&
+      error instanceof WebsiteAnalyzerError &&
+      (error.code === "FETCH_NETWORK_ERROR" || error.code === "FETCH_TIMEOUT");
+
+    if (!canFallback) throw error;
+
+    const fallback = new URL(target.normalizedUrl);
+    fallback.protocol = "http:";
+    fallback.port = "";
+    const httpTarget = await validateWebsiteUrl(fallback.toString());
+    return await fetchWebsiteHtml(httpTarget);
+  }
+}
+
 export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFetchParseResponse> {
   const target = await validateWebsiteUrl(rawUrl);
-  const fetchResult = await fetchWebsiteHtml(target);
+  const [fetchResult, transportSecurity] = await Promise.all([
+    fetchHomepageWithHttpFallback(target),
+    collectTransportSecurityEvidence(target),
+  ]);
   const pageFacts = responseAppearsHtml(fetchResult.contentType, fetchResult.html)
     ? extractPageFacts(fetchResult.html)
     : null;
-  const technicalHealthFindings = runTechnicalHealthBatch1({
+  const batch1Findings = runTechnicalHealthBatch1({
     target,
     fetchResult,
     pageFacts,
+  });
+  const batch2Findings = runTechnicalHealthBatch2({
+    transport: transportSecurity,
+    pageFacts,
+    finalUrl: fetchResult.finalUrl,
   });
 
   const fetchMetadata = {
@@ -51,8 +87,9 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     target,
     fetch: fetchMetadata,
     pageFacts,
-    technicalHealthFindings,
-    implementationStage: "TECHNICAL_HEALTH_BATCH_1",
-    nextStage: "TECHNICAL_HEALTH_BATCH_2",
+    transportSecurity,
+    technicalHealthFindings: [...batch1Findings, ...batch2Findings],
+    implementationStage: "TECHNICAL_HEALTH_BATCH_2",
+    nextStage: "TECHNICAL_HEALTH_BATCH_3",
   };
 }
