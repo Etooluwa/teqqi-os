@@ -1,6 +1,7 @@
 import "server-only";
 
 import { load, type CheerioAPI } from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import type {
   ButtonFact,
@@ -28,6 +29,11 @@ function splitTokens(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function documentIdSelector(id: string): string {
+  const escaped = id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `[id="${escaped}"]`;
+}
+
 function textFromLabelledBy($: CheerioAPI, ids: string | undefined): string {
   if (!ids) return "";
 
@@ -39,14 +45,7 @@ function textFromLabelledBy($: CheerioAPI, ids: string | undefined): string {
     .join(" ");
 }
 
-function documentIdSelector(id: string): string {
-  // CSS.escape is not available in every Node runtime. Attribute selectors avoid
-  // treating punctuation in an element ID as CSS syntax.
-  const escaped = id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `[id="${escaped}"]`;
-}
-
-function associatedLabelText($: CheerioAPI, element: Parameters<CheerioAPI>[0]): string {
+function associatedLabelText($: CheerioAPI, element: AnyNode): string {
   const node = $(element);
   const id = node.attr("id");
   const wrappingLabel = normalizeText(node.closest("label").first().text());
@@ -57,7 +56,7 @@ function associatedLabelText($: CheerioAPI, element: Parameters<CheerioAPI>[0]):
   return normalizeText($(`label[for="${escaped}"]`).first().text());
 }
 
-function controlAccessibleName($: CheerioAPI, element: Parameters<CheerioAPI>[0]): string {
+function controlAccessibleName($: CheerioAPI, element: AnyNode): string {
   const node = $(element);
   const ariaLabel = normalizeText(node.attr("aria-label"));
   if (ariaLabel) return ariaLabel;
@@ -160,9 +159,12 @@ function extractButtons($: CheerioAPI): ButtonFact[] {
   return buttons;
 }
 
-function extractFormControl($: CheerioAPI, element: Parameters<CheerioAPI>[0]): FormControlFact {
+function extractFormControl($: CheerioAPI, element: AnyNode): FormControlFact {
   const node = $(element);
-  const tag = (element.type === "tag" ? element.name.toLowerCase() : "input") as FormControlFact["tag"];
+  const tagName = element.type === "tag" ? element.name.toLowerCase() : "input";
+  const tag = (["input", "select", "textarea", "button"].includes(tagName)
+    ? tagName
+    : "input") as FormControlFact["tag"];
   const associatedLabel = associatedLabelText($, element);
 
   return {
@@ -224,8 +226,6 @@ function wordCount(value: string): number {
 }
 
 export function extractPageFacts(html: string): PageFacts {
-  // Cheerio uses parse5 for HTML parsing, giving browser-like HTML5 tree
-  // construction and error recovery instead of regex-based tag matching.
   const $ = load(html);
 
   const headings = extractHeadings($);
