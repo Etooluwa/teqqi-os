@@ -49,7 +49,7 @@ export type RedirectConsistencyEvidence = { requestedUrl: string; normalizedUrl:
 export type RobotsEvidence = { url: string; reachable: boolean; statusCode: number | null; contentType: string | null; bodySample: string; userAgentStarPresent: boolean; globallyBlocked: boolean | null; sitemapUrls: string[]; error: string | null };
 export type SitemapUrlProbe = { url: string; reachable: boolean; statusCode: number | null; finalUrl: string | null; error: string | null };
 export type SitemapEvidence = { candidates: string[]; selectedUrl: string | null; present: boolean; statusCode: number | null; validXml: boolean; sitemapType: "urlset" | "sitemapindex" | "unknown" | null; discoveredUrls: string[]; checkedUrls: SitemapUrlProbe[]; error: string | null };
-export type CrawledPageEvidence = { url: string; finalUrl: string | null; depth: number; reachable: boolean; statusCode: number | null; html: boolean; discoveredInternalLinks: number; links: LinkFact[]; error: string | null };
+export type CrawledPageEvidence = { url: string; finalUrl: string | null; depth: number; reachable: boolean; statusCode: number | null; html: boolean; discoveredInternalLinks: number; links?: LinkFact[]; error: string | null };
 export type InternalCrawlEvidence = { maxPages: number; maxDepth: number; attemptedPages: number; reachablePages: number; htmlPages: number; pages: CrawledPageEvidence[]; truncated: boolean };
 export type CrawlabilityEvidence = { robots: RobotsEvidence; sitemap: SitemapEvidence; internalCrawl: InternalCrawlEvidence };
 
@@ -57,16 +57,9 @@ export type LinkProbeEvidence = { url: string; kind: "internal" | "external"; re
 export type InvalidLinkEvidence = { pageUrl: string; href: string | null; reason: "missing" | "empty" | "malformed" };
 export type UnsupportedProtocolEvidence = { pageUrl: string; href: string; protocol: string };
 export type LinkIntegrityEvidence = {
-  sourcePageCount: number;
-  totalLinks: number;
-  internalLinks: string[];
-  externalLinks: string[];
-  internalProbes: LinkProbeEvidence[];
-  externalProbes: LinkProbeEvidence[];
-  invalidLinks: InvalidLinkEvidence[];
-  unsupportedProtocols: UnsupportedProtocolEvidence[];
-  externalProbeLimit: number;
-  externalProbeTruncated: boolean;
+  sourcePageCount: number; totalLinks: number; internalLinks: string[]; externalLinks: string[];
+  internalProbes: LinkProbeEvidence[]; externalProbes: LinkProbeEvidence[]; invalidLinks: InvalidLinkEvidence[];
+  unsupportedProtocols: UnsupportedProtocolEvidence[]; externalProbeLimit: number; externalProbeTruncated: boolean;
 };
 
 export type TechnicalHealthRuleId =
