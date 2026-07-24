@@ -1,4 +1,4 @@
-import type { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
+import { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
 
 export type AnalyzerCategory =
   | "TECHNICAL_HEALTH"
