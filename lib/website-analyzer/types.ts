@@ -185,6 +185,22 @@ export type TransportSecurityEvidence = {
   tls: TlsCertificateEvidence;
 };
 
+export type RedirectConsistencyEvidence = {
+  requestedUrl: string;
+  normalizedUrl: string;
+  finalUrl: string;
+  redirectCount: number;
+  redirects: RedirectHop[];
+  requestedHostname: string;
+  finalHostname: string;
+  requestedHostnameBase: string;
+  finalHostnameBase: string;
+  hostnameVariantChanged: boolean;
+  destinationSameSite: boolean;
+  repeatedUrlDetected: boolean;
+  normalizedInputChanged: boolean;
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001"
   | "TECH-002"
@@ -196,6 +212,11 @@ export type TechnicalHealthRuleId =
   | "TECH-008"
   | "TECH-009"
   | "TECH-010"
+  | "TECH-011"
+  | "TECH-012"
+  | "TECH-013"
+  | "TECH-014"
+  | "TECH-015"
   | `TECH-${string}`;
 
 export type AnalyzerFinding = {
@@ -239,9 +260,10 @@ export type AnalyzerFetchParseResponse = {
   fetch: Omit<HtmlFetchResult, "html">;
   pageFacts: PageFacts | null;
   transportSecurity: TransportSecurityEvidence;
+  redirectConsistency: RedirectConsistencyEvidence;
   technicalHealthFindings: AnalyzerFinding[];
-  implementationStage: "TECHNICAL_HEALTH_BATCH_2";
-  nextStage: "TECHNICAL_HEALTH_BATCH_3";
+  implementationStage: "TECHNICAL_HEALTH_BATCH_3";
+  nextStage: "TECHNICAL_HEALTH_BATCH_4";
 };
 
 export type AnalyzerErrorResponse = {
