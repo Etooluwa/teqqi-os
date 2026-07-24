@@ -9,8 +9,9 @@ import type {
 
 const GOOGLE_TEXT_SEARCH_URL =
   "https://places.googleapis.com/v1/places:searchText";
+const GOOGLE_PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places";
 
-const FIELD_MASK = [
+const SEARCH_FIELD_MASK = [
   "places.id",
   "places.displayName",
   "places.formattedAddress",
@@ -20,6 +21,17 @@ const FIELD_MASK = [
   "places.location",
   "places.businessStatus",
   "nextPageToken",
+].join(",");
+
+const DETAILS_FIELD_MASK = [
+  "id",
+  "displayName",
+  "formattedAddress",
+  "nationalPhoneNumber",
+  "websiteUri",
+  "rating",
+  "location",
+  "businessStatus",
 ].join(",");
 
 const GOOGLE_MAX_RESULTS = 60;
@@ -124,7 +136,7 @@ async function fetchSearchPage(params: {
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": googlePlacesApiKey,
-      "X-Goog-FieldMask": FIELD_MASK,
+      "X-Goog-FieldMask": SEARCH_FIELD_MASK,
     },
     body: JSON.stringify({
       textQuery: params.query,
@@ -144,6 +156,45 @@ async function fetchSearchPage(params: {
   }
 
   return (await response.json()) as GoogleTextSearchResponse;
+}
+
+export async function getGooglePlaceDetails(
+  placeId: string,
+  resultPosition: number,
+): Promise<ProviderBusinessResult> {
+  const { googlePlacesApiKey } = getGooglePlacesEnv();
+  const response = await fetch(
+    `${GOOGLE_PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`,
+    {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": googlePlacesApiKey,
+        "X-Goog-FieldMask": DETAILS_FIELD_MASK,
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new GooglePlacesError(
+      `Google Place Details request failed with status ${response.status}.`,
+      response.status,
+      responseBody,
+    );
+  }
+
+  const place = (await response.json()) as GooglePlace;
+  const result = toProviderResult(place, resultPosition);
+
+  if (!result) {
+    throw new GooglePlacesError(
+      "Google Place Details response was missing required identity fields.",
+      502,
+    );
+  }
+
+  return result;
 }
 
 export async function searchGooglePlaces(
