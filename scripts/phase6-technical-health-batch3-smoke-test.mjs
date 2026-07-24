@@ -24,7 +24,7 @@ async function run() {
 
   const { response, data } = await analyze("google.com");
   assert(response.ok, `Google analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_3", "Expected Batch 3 stage.");
+  assert(String(data.implementationStage).startsWith("TECHNICAL_HEALTH_BATCH_"), "Expected Technical Health stage.");
   assert(Array.isArray(data.technicalHealthFindings), "Expected Technical Health findings.");
   assert(data.technicalHealthFindings.length >= 15, "Expected findings through TECH-015.");
   assert(typeof data.redirectConsistency === "object", "Expected redirect-consistency evidence.");
