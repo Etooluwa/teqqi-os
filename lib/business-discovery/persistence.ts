@@ -3,7 +3,7 @@ import "server-only";
 import { supabaseRest } from "@/lib/supabase/server";
 import type { BusinessSearchInput, ProviderBusinessResult } from "@/lib/business-discovery/types";
 
-type SearchHistoryRow = {
+export type SearchHistoryRow = {
   id: string;
   query_text: string | null;
   industry: string;
@@ -106,6 +106,18 @@ export async function finalizeSearchExecution(params: {
       error_message: params.errorMessage ?? null,
     },
   });
+}
+
+export async function listSearchExecutions(limit = 25): Promise<SearchHistoryRow[]> {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const query = new URLSearchParams({
+    select:
+      "id,query_text,industry,location_text,normalized_industry,normalized_location,requested_max_results,source,status,result_count,created_at",
+    order: "created_at.desc",
+    limit: String(safeLimit),
+  });
+
+  return supabaseRest<SearchHistoryRow[]>(`/search_history?${query.toString()}`);
 }
 
 export async function getSearchExecution(searchId: string): Promise<SearchHistoryRow | null> {
