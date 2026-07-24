@@ -11,7 +11,16 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const fetchResult = await fetchWebsiteHtml(target);
   const pageFacts = extractPageFacts(fetchResult.html);
 
-  const { html: _html, ...fetchMetadata } = fetchResult;
+  const fetchMetadata = {
+    requestedUrl: fetchResult.requestedUrl,
+    finalUrl: fetchResult.finalUrl,
+    status: fetchResult.status,
+    contentType: fetchResult.contentType,
+    redirectCount: fetchResult.redirectCount,
+    redirects: fetchResult.redirects,
+    byteLength: fetchResult.byteLength,
+    fetchedAt: fetchResult.fetchedAt,
+  };
 
   return {
     ok: true,
