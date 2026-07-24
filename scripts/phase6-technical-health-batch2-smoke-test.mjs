@@ -24,7 +24,7 @@ async function run() {
 
   const { response, data } = await analyze("https://www.google.com/");
   assert(response.ok, `Google analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_2", "Expected Batch 2 stage.");
+  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_3", "Expected analyzer to have advanced through Batch 3.");
   assert(Array.isArray(data.technicalHealthFindings), "Expected Technical Health findings.");
   assert(data.technicalHealthFindings.length >= 10, "Expected findings through TECH-010.");
   assert(typeof data.transportSecurity === "object", "Expected transport-security evidence.");
@@ -43,10 +43,6 @@ async function run() {
 
   assert(["PASS", "WARNING"].includes(findingById(data, "TECH-006")?.status), "TECH-006 should find HTTPS available.");
 
-  // TECH-007 is about classification, not assuming a particular public site must
-  // redirect HTTP to HTTPS. PASS means it upgrades, FAIL means it serves HTTP
-  // without upgrading, and UNKNOWN means the HTTP endpoint could not be tested
-  // reliably. All three are valid deterministic outcomes for a live fixture.
   const tech007 = findingById(data, "TECH-007");
   assert(["PASS", "FAIL", "UNKNOWN"].includes(tech007?.status), "TECH-007 should classify HTTP upgrade behavior.");
   assert(
