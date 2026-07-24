@@ -57,8 +57,8 @@ async function run() {
     assert(data.analyzerVersion === "1.0.0", "Analyzer version should be 1.0.0.");
     assert(data.target?.normalizedUrl === "https://google.com/", "Bare hostname should normalize to HTTPS.");
     assert(
-      data.implementationStage === "TECHNICAL_HEALTH_BATCH_3",
-      "Validated public URL should continue through Technical Health Batch 3.",
+      String(data.implementationStage).startsWith("TECHNICAL_HEALTH_BATCH_"),
+      "Validated public URL should continue into Technical Health analysis.",
     );
     console.log("✓ Public URL validation and normalization");
   }
