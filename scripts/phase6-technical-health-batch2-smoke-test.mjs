@@ -42,13 +42,24 @@ async function run() {
   }
 
   assert(["PASS", "WARNING"].includes(findingById(data, "TECH-006")?.status), "TECH-006 should find HTTPS available.");
-  assert(["PASS", "UNKNOWN"].includes(findingById(data, "TECH-007")?.status), "TECH-007 should classify HTTP upgrade behavior.");
+
+  // TECH-007 is about classification, not assuming a particular public site must
+  // redirect HTTP to HTTPS. PASS means it upgrades, FAIL means it serves HTTP
+  // without upgrading, and UNKNOWN means the HTTP endpoint could not be tested
+  // reliably. All three are valid deterministic outcomes for a live fixture.
+  const tech007 = findingById(data, "TECH-007");
+  assert(["PASS", "FAIL", "UNKNOWN"].includes(tech007?.status), "TECH-007 should classify HTTP upgrade behavior.");
+  assert(
+    [true, false, null].includes(tech007?.result?.redirectsToHttps),
+    "TECH-007 should expose redirectsToHttps as true, false, or null.",
+  );
+
   assert(findingById(data, "TECH-008")?.status === "PASS", "TECH-008 should validate Google's TLS certificate.");
   assert(["PASS", "WARNING"].includes(findingById(data, "TECH-009")?.status), "TECH-009 should classify certificate expiry risk.");
   assert(findingById(data, "TECH-010")?.status === "PASS", "TECH-010 should find no mixed active content on Google homepage.");
 
   console.log("✓ TECH-006 HTTPS availability");
-  console.log("✓ TECH-007 HTTP to HTTPS behavior");
+  console.log(`✓ TECH-007 HTTP to HTTPS behavior (${tech007.status})`);
   console.log("✓ TECH-008 TLS certificate validity");
   console.log("✓ TECH-009 certificate expiry risk");
   console.log("✓ TECH-010 mixed active content inspection");
