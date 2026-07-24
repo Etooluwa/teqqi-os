@@ -5,10 +5,12 @@ import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
 import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { runTechnicalHealthBatch1 } from "@/lib/website-analyzer/technical-health/batch1";
 import { runTechnicalHealthBatch2 } from "@/lib/website-analyzer/technical-health/batch2";
+import { runTechnicalHealthBatch3 } from "@/lib/website-analyzer/technical-health/batch3";
 import { collectTransportSecurityEvidence } from "@/lib/website-analyzer/transport";
 import type {
   AnalyzerFetchParseResponse,
   HtmlFetchResult,
+  RedirectConsistencyEvidence,
   ValidatedWebsiteTarget,
 } from "@/lib/website-analyzer/types";
 import { validateWebsiteUrl } from "@/lib/website-analyzer/url";
@@ -49,6 +51,51 @@ async function fetchHomepageWithHttpFallback(
   }
 }
 
+function hostnameBase(hostname: string): string {
+  return hostname.toLowerCase().replace(/^www\./, "");
+}
+
+function buildRedirectConsistencyEvidence(
+  rawUrl: string,
+  target: ValidatedWebsiteTarget,
+  fetchResult: HtmlFetchResult,
+): RedirectConsistencyEvidence {
+  const final = new URL(fetchResult.finalUrl);
+  const requestedHostname = target.hostname.toLowerCase();
+  const finalHostname = final.hostname.toLowerCase();
+  const requestedHostnameBase = hostnameBase(requestedHostname);
+  const finalHostnameBase = hostnameBase(finalHostname);
+
+  const pathUrls = [
+    target.normalizedUrl,
+    ...fetchResult.redirects.map((hop) => hop.toUrl),
+  ].map((url) => {
+    try {
+      return new URL(url).toString();
+    } catch {
+      return url;
+    }
+  });
+  const repeatedUrlDetected = new Set(pathUrls).size !== pathUrls.length;
+
+  return {
+    requestedUrl: rawUrl,
+    normalizedUrl: target.normalizedUrl,
+    finalUrl: fetchResult.finalUrl,
+    redirectCount: fetchResult.redirectCount,
+    redirects: fetchResult.redirects,
+    requestedHostname,
+    finalHostname,
+    requestedHostnameBase,
+    finalHostnameBase,
+    hostnameVariantChanged:
+      requestedHostnameBase === finalHostnameBase && requestedHostname !== finalHostname,
+    destinationSameSite: requestedHostnameBase === finalHostnameBase,
+    repeatedUrlDetected,
+    normalizedInputChanged: rawUrl.trim() !== target.normalizedUrl,
+  };
+}
+
 export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFetchParseResponse> {
   const target = await validateWebsiteUrl(rawUrl);
   const [fetchResult, transportSecurity] = await Promise.all([
@@ -58,6 +105,8 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const pageFacts = responseAppearsHtml(fetchResult.contentType, fetchResult.html)
     ? extractPageFacts(fetchResult.html)
     : null;
+  const redirectConsistency = buildRedirectConsistencyEvidence(rawUrl, target, fetchResult);
+
   const batch1Findings = runTechnicalHealthBatch1({
     target,
     fetchResult,
@@ -68,6 +117,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     pageFacts,
     finalUrl: fetchResult.finalUrl,
   });
+  const batch3Findings = runTechnicalHealthBatch3(redirectConsistency);
 
   const fetchMetadata = {
     requestedUrl: fetchResult.requestedUrl,
@@ -88,8 +138,9 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     fetch: fetchMetadata,
     pageFacts,
     transportSecurity,
-    technicalHealthFindings: [...batch1Findings, ...batch2Findings],
-    implementationStage: "TECHNICAL_HEALTH_BATCH_2",
-    nextStage: "TECHNICAL_HEALTH_BATCH_3",
+    redirectConsistency,
+    technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings],
+    implementationStage: "TECHNICAL_HEALTH_BATCH_3",
+    nextStage: "TECHNICAL_HEALTH_BATCH_4",
   };
 }
