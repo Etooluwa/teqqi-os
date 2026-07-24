@@ -22,7 +22,7 @@ async function run() {
     const { response, data } = await post("https://www.wikipedia.org/");
     assert(response.ok, `Public HTML fetch should succeed: HTTP ${response.status} ${JSON.stringify(data)}`);
     assert(data.ok === true, "Expected ok=true.");
-    assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_1", "Expected Technical Health Batch 1 stage.");
+    assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_2", "Expected Technical Health Batch 2 stage.");
     assert(data.fetch?.status >= 200 && data.fetch?.status < 600, "Expected HTTP status metadata.");
     assert(typeof data.fetch?.byteLength === "number" && data.fetch.byteLength > 0, "Expected non-empty response.");
     assert(typeof data.pageFacts === "object" && data.pageFacts !== null, "Expected pageFacts object for HTML.");
@@ -33,6 +33,7 @@ async function run() {
     assert(Array.isArray(data.pageFacts.links), "Expected link facts.");
     assert(Array.isArray(data.pageFacts.images), "Expected image facts.");
     assert(Array.isArray(data.pageFacts.forms), "Expected form facts.");
+    assert(Array.isArray(data.pageFacts.activeResourceReferences), "Expected active-resource facts.");
     assert(typeof data.pageFacts.landmarks?.navCount === "number", "Expected semantic landmark facts.");
     assert(typeof data.pageFacts.bodyTextWordCount === "number", "Expected body text metrics.");
     assert(typeof data.pageFacts.bodyTextSample === "string", "Expected bounded body text sample.");
