@@ -118,7 +118,7 @@ function extractLinks($: CheerioAPI): LinkFact[] {
       rel: splitTokens(node.attr("rel")),
       target: nullableAttribute(node.attr("target")),
       ariaLabel,
-      accessibleName: ariaLabel ?? labelledByText || text || childImageAlt,
+      accessibleName: ariaLabel ?? (labelledByText || text || childImageAlt),
     });
   });
 
@@ -232,16 +232,16 @@ export function extractPageFacts(html: string): PageFacts {
   const jsonLdBlocks = extractJsonLdBlocks($);
   const bodyText = normalizeText($("body").text());
   const titleElements = $("title");
-  const descriptionElements = $('meta[name]').filter((_, element) =>
+  const descriptionElements = $("meta[name]").filter((_, element) =>
     ($(element).attr("name") ?? "").trim().toLowerCase() === "description",
   );
-  const robotsElements = $('meta[name]').filter((_, element) =>
+  const robotsElements = $("meta[name]").filter((_, element) =>
     ($(element).attr("name") ?? "").trim().toLowerCase() === "robots",
   );
-  const canonicalElements = $('link[rel]').filter((_, element) =>
+  const canonicalElements = $("link[rel]").filter((_, element) =>
     splitTokens($(element).attr("rel")).includes("canonical"),
   );
-  const viewportElements = $('meta[name]').filter((_, element) =>
+  const viewportElements = $("meta[name]").filter((_, element) =>
     ($(element).attr("name") ?? "").trim().toLowerCase() === "viewport",
   );
 
