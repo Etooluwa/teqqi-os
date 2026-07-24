@@ -26,9 +26,16 @@ async function run() {
     assert(data.fetch?.status >= 200 && data.fetch?.status < 600, "Expected HTTP status metadata.");
     assert(typeof data.fetch?.byteLength === "number" && data.fetch.byteLength > 0, "Expected non-empty HTML response.");
     assert(typeof data.pageFacts === "object", "Expected pageFacts object.");
-    assert(Array.isArray(data.pageFacts.h1Texts), "Expected heading facts.");
+    assert(data.pageFacts.parser === "CHEERIO_PARSE5", "Expected standards-based Cheerio/parse5 parser.");
+    assert(typeof data.pageFacts.document?.hasHtml === "boolean", "Expected normalized document-structure facts.");
+    assert(Array.isArray(data.pageFacts.headings), "Expected normalized heading facts.");
+    assert(Array.isArray(data.pageFacts.h1Texts), "Expected H1 compatibility facts.");
     assert(Array.isArray(data.pageFacts.links), "Expected link facts.");
-    console.log("✓ Public HTML fetch and shared fact extraction");
+    assert(Array.isArray(data.pageFacts.images), "Expected image facts.");
+    assert(Array.isArray(data.pageFacts.forms), "Expected form facts.");
+    assert(typeof data.pageFacts.landmarks?.navCount === "number", "Expected semantic landmark facts.");
+    assert(typeof data.pageFacts.bodyTextWordCount === "number", "Expected body text metrics.");
+    console.log("✓ Standards-based DOM parsing and hardened shared fact extraction");
   }
 
   {
