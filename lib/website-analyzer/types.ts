@@ -115,6 +115,12 @@ export type LandmarkFacts = {
   asideCount: number;
 };
 
+export type ActiveResourceReference = {
+  tag: "script" | "link" | "iframe" | "object" | "embed" | "form";
+  attribute: "src" | "href" | "data" | "action";
+  url: string;
+};
+
 export type PageFacts = {
   parser: "CHEERIO_PARSE5";
   document: {
@@ -140,6 +146,7 @@ export type PageFacts = {
   buttons: ButtonFact[];
   forms: FormFact[];
   landmarks: LandmarkFacts;
+  activeResourceReferences: ActiveResourceReference[];
   jsonLdBlocks: string[];
   jsonLdBlockCount: number;
   scriptCount: number;
@@ -149,12 +156,46 @@ export type PageFacts = {
   bodyTextSample: string;
 };
 
+export type HttpProbeEvidence = {
+  attemptedUrl: string;
+  available: boolean;
+  statusCode: number | null;
+  finalUrl: string | null;
+  redirects: RedirectHop[];
+  error: string | null;
+};
+
+export type TlsCertificateEvidence = {
+  connected: boolean;
+  authorized: boolean;
+  authorizationError: string | null;
+  protocol: string | null;
+  cipher: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  daysRemaining: number | null;
+  subject: Record<string, string>;
+  issuer: Record<string, string>;
+  error: string | null;
+};
+
+export type TransportSecurityEvidence = {
+  https: HttpProbeEvidence;
+  http: HttpProbeEvidence;
+  tls: TlsCertificateEvidence;
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001"
   | "TECH-002"
   | "TECH-003"
   | "TECH-004"
   | "TECH-005"
+  | "TECH-006"
+  | "TECH-007"
+  | "TECH-008"
+  | "TECH-009"
+  | "TECH-010"
   | `TECH-${string}`;
 
 export type AnalyzerFinding = {
@@ -197,9 +238,10 @@ export type AnalyzerFetchParseResponse = {
   target: ValidatedWebsiteTarget;
   fetch: Omit<HtmlFetchResult, "html">;
   pageFacts: PageFacts | null;
+  transportSecurity: TransportSecurityEvidence;
   technicalHealthFindings: AnalyzerFinding[];
-  implementationStage: "TECHNICAL_HEALTH_BATCH_1";
-  nextStage: "TECHNICAL_HEALTH_BATCH_2";
+  implementationStage: "TECHNICAL_HEALTH_BATCH_2";
+  nextStage: "TECHNICAL_HEALTH_BATCH_3";
 };
 
 export type AnalyzerErrorResponse = {
