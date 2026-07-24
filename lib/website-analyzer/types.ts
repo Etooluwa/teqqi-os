@@ -201,6 +201,65 @@ export type RedirectConsistencyEvidence = {
   normalizedInputChanged: boolean;
 };
 
+export type RobotsEvidence = {
+  url: string;
+  reachable: boolean;
+  statusCode: number | null;
+  contentType: string | null;
+  bodySample: string;
+  userAgentStarPresent: boolean;
+  globallyBlocked: boolean | null;
+  sitemapUrls: string[];
+  error: string | null;
+};
+
+export type SitemapUrlProbe = {
+  url: string;
+  reachable: boolean;
+  statusCode: number | null;
+  finalUrl: string | null;
+  error: string | null;
+};
+
+export type SitemapEvidence = {
+  candidates: string[];
+  selectedUrl: string | null;
+  present: boolean;
+  statusCode: number | null;
+  validXml: boolean;
+  sitemapType: "urlset" | "sitemapindex" | "unknown" | null;
+  discoveredUrls: string[];
+  checkedUrls: SitemapUrlProbe[];
+  error: string | null;
+};
+
+export type CrawledPageEvidence = {
+  url: string;
+  finalUrl: string | null;
+  depth: number;
+  reachable: boolean;
+  statusCode: number | null;
+  html: boolean;
+  discoveredInternalLinks: number;
+  error: string | null;
+};
+
+export type InternalCrawlEvidence = {
+  maxPages: number;
+  maxDepth: number;
+  attemptedPages: number;
+  reachablePages: number;
+  htmlPages: number;
+  pages: CrawledPageEvidence[];
+  truncated: boolean;
+};
+
+export type CrawlabilityEvidence = {
+  robots: RobotsEvidence;
+  sitemap: SitemapEvidence;
+  internalCrawl: InternalCrawlEvidence;
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001"
   | "TECH-002"
@@ -217,6 +276,11 @@ export type TechnicalHealthRuleId =
   | "TECH-013"
   | "TECH-014"
   | "TECH-015"
+  | "TECH-016"
+  | "TECH-017"
+  | "TECH-018"
+  | "TECH-019"
+  | "TECH-020"
   | `TECH-${string}`;
 
 export type AnalyzerFinding = {
@@ -261,9 +325,10 @@ export type AnalyzerFetchParseResponse = {
   pageFacts: PageFacts | null;
   transportSecurity: TransportSecurityEvidence;
   redirectConsistency: RedirectConsistencyEvidence;
+  crawlability: CrawlabilityEvidence;
   technicalHealthFindings: AnalyzerFinding[];
-  implementationStage: "TECHNICAL_HEALTH_BATCH_3";
-  nextStage: "TECHNICAL_HEALTH_BATCH_4";
+  implementationStage: "TECHNICAL_HEALTH_BATCH_4";
+  nextStage: "TECHNICAL_HEALTH_BATCH_5";
 };
 
 export type AnalyzerErrorResponse = {
