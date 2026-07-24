@@ -25,9 +25,9 @@ async function run() {
   {
     const { response, data } = await analyze("https://www.wikipedia.org/");
     assert(response.ok, `Wikipedia analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-    assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_1", "Expected Batch 1 stage.");
+    assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_2", "Expected analyzer to have advanced through Batch 2.");
     assert(Array.isArray(data.technicalHealthFindings), "Expected Technical Health findings.");
-    assert(data.technicalHealthFindings.length === 5, "Batch 1 should return exactly five findings.");
+    assert(data.technicalHealthFindings.length >= 5, "Analyzer should include at least the five Batch 1 findings.");
 
     for (const ruleId of ["TECH-001", "TECH-002", "TECH-003", "TECH-004", "TECH-005"]) {
       const finding = findingById(data, ruleId);
