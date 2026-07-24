@@ -1,11 +1,13 @@
 import "server-only";
 
+import { collectCrawlabilityEvidence } from "@/lib/website-analyzer/crawlability";
 import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
 import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { runTechnicalHealthBatch1 } from "@/lib/website-analyzer/technical-health/batch1";
 import { runTechnicalHealthBatch2 } from "@/lib/website-analyzer/technical-health/batch2";
 import { runTechnicalHealthBatch3 } from "@/lib/website-analyzer/technical-health/batch3";
+import { runTechnicalHealthBatch4 } from "@/lib/website-analyzer/technical-health/batch4";
 import { collectTransportSecurityEvidence } from "@/lib/website-analyzer/transport";
 import type {
   AnalyzerFetchParseResponse,
@@ -106,6 +108,10 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     ? extractPageFacts(fetchResult.html)
     : null;
   const redirectConsistency = buildRedirectConsistencyEvidence(rawUrl, target, fetchResult);
+  const crawlability = await collectCrawlabilityEvidence({
+    finalUrl: fetchResult.finalUrl,
+    homepageFacts: pageFacts,
+  });
 
   const batch1Findings = runTechnicalHealthBatch1({
     target,
@@ -118,6 +124,10 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     finalUrl: fetchResult.finalUrl,
   });
   const batch3Findings = runTechnicalHealthBatch3(redirectConsistency);
+  const batch4Findings = runTechnicalHealthBatch4({
+    evidence: crawlability,
+    homepageFacts: pageFacts,
+  });
 
   const fetchMetadata = {
     requestedUrl: fetchResult.requestedUrl,
@@ -139,8 +149,14 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     pageFacts,
     transportSecurity,
     redirectConsistency,
-    technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings],
-    implementationStage: "TECHNICAL_HEALTH_BATCH_3",
-    nextStage: "TECHNICAL_HEALTH_BATCH_4",
+    crawlability,
+    technicalHealthFindings: [
+      ...batch1Findings,
+      ...batch2Findings,
+      ...batch3Findings,
+      ...batch4Findings,
+    ],
+    implementationStage: "TECHNICAL_HEALTH_BATCH_4",
+    nextStage: "TECHNICAL_HEALTH_BATCH_5",
   };
 }
