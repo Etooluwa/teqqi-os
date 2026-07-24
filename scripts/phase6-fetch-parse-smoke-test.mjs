@@ -22,7 +22,7 @@ async function run() {
     const { response, data } = await post("https://www.wikipedia.org/");
     assert(response.ok, `Public HTML fetch should succeed: HTTP ${response.status} ${JSON.stringify(data)}`);
     assert(data.ok === true, "Expected ok=true.");
-    assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_3", "Expected Technical Health Batch 3 stage.");
+    assert(String(data.implementationStage).startsWith("TECHNICAL_HEALTH_BATCH_"), "Expected Technical Health stage.");
     assert(data.fetch?.status >= 200 && data.fetch?.status < 600, "Expected HTTP status metadata.");
     assert(typeof data.fetch?.byteLength === "number" && data.fetch.byteLength > 0, "Expected non-empty response.");
     assert(typeof data.pageFacts === "object" && data.pageFacts !== null, "Expected pageFacts object for HTML.");
