@@ -75,12 +75,6 @@ async function fetchOnce(url: string): Promise<Response> {
   }
 }
 
-function isHtmlContentType(contentType: string | null): boolean {
-  if (!contentType) return true;
-  const normalized = contentType.toLowerCase();
-  return normalized.includes("text/html") || normalized.includes("application/xhtml+xml");
-}
-
 export async function fetchWebsiteHtml(initialTarget: ValidatedWebsiteTarget): Promise<HtmlFetchResult> {
   const redirects: RedirectHop[] = [];
   let currentTarget = initialTarget;
@@ -120,14 +114,6 @@ export async function fetchWebsiteHtml(initialTarget: ValidatedWebsiteTarget): P
     }
 
     const contentType = response.headers.get("content-type");
-    if (!isHtmlContentType(contentType)) {
-      throw new WebsiteAnalyzerError(
-        "UNSUPPORTED_CONTENT_TYPE",
-        `Website returned an unsupported content type: ${contentType ?? "unknown"}.`,
-        415,
-      );
-    }
-
     const contentLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
       throw new WebsiteAnalyzerError(
