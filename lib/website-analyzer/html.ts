@@ -1,107 +1,286 @@
 import "server-only";
 
-import type { PageFacts } from "@/lib/website-analyzer/types";
+import { load, type CheerioAPI } from "cheerio";
 
-function decodeBasicEntities(value: string): string {
-  return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">");
+import type {
+  ButtonFact,
+  FormControlFact,
+  FormFact,
+  HeadingFact,
+  ImageFact,
+  LinkFact,
+  PageFacts,
+} from "@/lib/website-analyzer/types";
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
-function stripTags(value: string): string {
-  return decodeBasicEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
+function nullableAttribute(value: string | undefined): string | null {
+  const normalized = normalizeText(value);
+  return normalized || null;
 }
 
-function getAttribute(tag: string, name: string): string | null {
-  const pattern = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
-  const match = tag.match(pattern);
-  return decodeBasicEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? "") || null;
+function splitTokens(value: string | undefined): string[] {
+  return normalizeText(value)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
-function findFirstTagContent(html: string, tagName: string): string | null {
-  const match = html.match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
-  return match ? stripTags(match[1]) : null;
+function textFromLabelledBy($: CheerioAPI, ids: string | undefined): string {
+  if (!ids) return "";
+
+  return ids
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((id) => normalizeText($(documentIdSelector(id)).text()))
+    .filter(Boolean)
+    .join(" ");
 }
 
-function findAllTagContents(html: string, tagName: string): string[] {
-  const values: string[] = [];
-  const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "gi");
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(html)) !== null) values.push(stripTags(match[1]));
-  return values;
+function documentIdSelector(id: string): string {
+  // CSS.escape is not available in every Node runtime. Attribute selectors avoid
+  // treating punctuation in an element ID as CSS syntax.
+  const escaped = id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `[id="${escaped}"]`;
 }
 
-function findMetaContent(html: string, name: string): string | null {
-  const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
-  for (const tag of tags) {
-    if ((getAttribute(tag, "name") ?? "").toLowerCase() === name.toLowerCase()) {
-      return getAttribute(tag, "content");
-    }
+function associatedLabelText($: CheerioAPI, element: Parameters<CheerioAPI>[0]): string {
+  const node = $(element);
+  const id = node.attr("id");
+  const wrappingLabel = normalizeText(node.closest("label").first().text());
+  if (wrappingLabel) return wrappingLabel;
+
+  if (!id) return "";
+  const escaped = id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return normalizeText($(`label[for="${escaped}"]`).first().text());
+}
+
+function controlAccessibleName($: CheerioAPI, element: Parameters<CheerioAPI>[0]): string {
+  const node = $(element);
+  const ariaLabel = normalizeText(node.attr("aria-label"));
+  if (ariaLabel) return ariaLabel;
+
+  const labelledBy = textFromLabelledBy($, node.attr("aria-labelledby"));
+  if (labelledBy) return labelledBy;
+
+  const label = associatedLabelText($, element);
+  if (label) return label;
+
+  if (node.is("button")) return normalizeText(node.text());
+
+  const type = normalizeText(node.attr("type")).toLowerCase();
+  if (node.is("input") && ["submit", "button", "reset"].includes(type)) {
+    return normalizeText(node.attr("value"));
   }
-  return null;
+
+  return "";
 }
 
-function findCanonical(html: string): string | null {
-  const tags = html.match(/<link\b[^>]*>/gi) ?? [];
-  for (const tag of tags) {
-    const rel = (getAttribute(tag, "rel") ?? "").toLowerCase().split(/\s+/);
-    if (rel.includes("canonical")) return getAttribute(tag, "href");
-  }
-  return null;
+function extractHeadings($: CheerioAPI): HeadingFact[] {
+  const headings: HeadingFact[] = [];
+
+  $("h1,h2,h3,h4,h5,h6").each((_, element) => {
+    const tagName = element.type === "tag" ? element.name.toLowerCase() : "";
+    const level = Number(tagName.slice(1));
+    if (level < 1 || level > 6) return;
+
+    headings.push({
+      level: level as HeadingFact["level"],
+      text: normalizeText($(element).text()),
+      id: nullableAttribute($(element).attr("id")),
+    });
+  });
+
+  return headings;
 }
 
-function findHtmlLang(html: string): string | null {
-  const tag = html.match(/<html\b[^>]*>/i)?.[0];
-  return tag ? getAttribute(tag, "lang") : null;
+function extractLinks($: CheerioAPI): LinkFact[] {
+  const links: LinkFact[] = [];
+
+  $("a").each((_, element) => {
+    const node = $(element);
+    const text = normalizeText(node.text());
+    const ariaLabel = nullableAttribute(node.attr("aria-label"));
+    const labelledByText = textFromLabelledBy($, node.attr("aria-labelledby"));
+    const childImageAlt = normalizeText(
+      node
+        .find("img[alt]")
+        .map((__, image) => $(image).attr("alt") ?? "")
+        .get()
+        .join(" "),
+    );
+
+    links.push({
+      href: nullableAttribute(node.attr("href")),
+      text,
+      rel: splitTokens(node.attr("rel")),
+      target: nullableAttribute(node.attr("target")),
+      ariaLabel,
+      accessibleName: ariaLabel ?? labelledByText || text || childImageAlt,
+    });
+  });
+
+  return links;
+}
+
+function extractImages($: CheerioAPI): ImageFact[] {
+  const images: ImageFact[] = [];
+
+  $("img").each((_, element) => {
+    const node = $(element);
+    const altValue = node.attr("alt");
+
+    images.push({
+      src: nullableAttribute(node.attr("src")),
+      alt: altValue === undefined ? null : normalizeText(altValue),
+      hasAltAttribute: altValue !== undefined,
+      width: nullableAttribute(node.attr("width")),
+      height: nullableAttribute(node.attr("height")),
+    });
+  });
+
+  return images;
+}
+
+function extractButtons($: CheerioAPI): ButtonFact[] {
+  const buttons: ButtonFact[] = [];
+
+  $("button").each((_, element) => {
+    const node = $(element);
+    buttons.push({
+      text: normalizeText(node.text()),
+      type: nullableAttribute(node.attr("type")),
+      ariaLabel: nullableAttribute(node.attr("aria-label")),
+      accessibleName: controlAccessibleName($, element),
+    });
+  });
+
+  return buttons;
+}
+
+function extractFormControl($: CheerioAPI, element: Parameters<CheerioAPI>[0]): FormControlFact {
+  const node = $(element);
+  const tag = (element.type === "tag" ? element.name.toLowerCase() : "input") as FormControlFact["tag"];
+  const associatedLabel = associatedLabelText($, element);
+
+  return {
+    tag,
+    type: tag === "input" || tag === "button" ? nullableAttribute(node.attr("type")) : null,
+    id: nullableAttribute(node.attr("id")),
+    name: nullableAttribute(node.attr("name")),
+    ariaLabel: nullableAttribute(node.attr("aria-label")),
+    ariaLabelledBy: nullableAttribute(node.attr("aria-labelledby")),
+    placeholder: nullableAttribute(node.attr("placeholder")),
+    hasAssociatedLabel: Boolean(associatedLabel),
+    accessibleName: controlAccessibleName($, element),
+  };
+}
+
+function isSubmitControl(control: FormControlFact): boolean {
+  const type = (control.type ?? "").toLowerCase();
+  if (control.tag === "button") return !type || type === "submit";
+  return control.tag === "input" && (type === "submit" || type === "image");
+}
+
+function extractForms($: CheerioAPI): FormFact[] {
+  const forms: FormFact[] = [];
+
+  $("form").each((_, formElement) => {
+    const form = $(formElement);
+    const controls: FormControlFact[] = [];
+
+    form.find("input,select,textarea,button").each((__, control) => {
+      controls.push(extractFormControl($, control));
+    });
+
+    forms.push({
+      action: nullableAttribute(form.attr("action")),
+      method: nullableAttribute(form.attr("method")),
+      id: nullableAttribute(form.attr("id")),
+      controls,
+      submitControlCount: controls.filter(isSubmitControl).length,
+    });
+  });
+
+  return forms;
+}
+
+function extractJsonLdBlocks($: CheerioAPI): string[] {
+  const blocks: string[] = [];
+
+  $('script[type="application/ld+json"]').each((_, element) => {
+    const value = $(element).html();
+    if (value !== null) blocks.push(value.trim());
+  });
+
+  return blocks;
+}
+
+function wordCount(value: string): number {
+  const normalized = normalizeText(value);
+  return normalized ? normalized.split(/\s+/).length : 0;
 }
 
 export function extractPageFacts(html: string): PageFacts {
-  const links = (html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) ?? []).map((tag) => ({
-    href: getAttribute(tag.match(/<a\b[^>]*>/i)?.[0] ?? tag, "href"),
-    text: stripTags(tag),
-  }));
+  // Cheerio uses parse5 for HTML parsing, giving browser-like HTML5 tree
+  // construction and error recovery instead of regex-based tag matching.
+  const $ = load(html);
 
-  const images = (html.match(/<img\b[^>]*>/gi) ?? []).map((tag) => ({
-    src: getAttribute(tag, "src"),
-    alt: getAttribute(tag, "alt"),
-  }));
-
-  const buttons = (html.match(/<button\b[^>]*>[\s\S]*?<\/button>/gi) ?? []).map((tag) => ({
-    text: stripTags(tag),
-  }));
-
-  const forms = (html.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) ?? []).map((formHtml) => {
-    const openingTag = formHtml.match(/<form\b[^>]*>/i)?.[0] ?? "";
-    const inputTypes = (formHtml.match(/<input\b[^>]*>/gi) ?? []).map(
-      (input) => (getAttribute(input, "type") ?? "text").toLowerCase(),
-    );
-    return {
-      action: getAttribute(openingTag, "action"),
-      method: getAttribute(openingTag, "method"),
-      inputTypes,
-    };
-  });
-
-  const jsonLdBlocks = (html.match(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [])
-    .map((script) => script.replace(/^<script\b[^>]*>/i, "").replace(/<\/script>$/i, "").trim());
+  const headings = extractHeadings($);
+  const jsonLdBlocks = extractJsonLdBlocks($);
+  const bodyText = normalizeText($("body").text());
+  const titleElements = $("title");
+  const descriptionElements = $('meta[name]').filter((_, element) =>
+    ($(element).attr("name") ?? "").trim().toLowerCase() === "description",
+  );
+  const robotsElements = $('meta[name]').filter((_, element) =>
+    ($(element).attr("name") ?? "").trim().toLowerCase() === "robots",
+  );
+  const canonicalElements = $('link[rel]').filter((_, element) =>
+    splitTokens($(element).attr("rel")).includes("canonical"),
+  );
+  const viewportElements = $('meta[name]').filter((_, element) =>
+    ($(element).attr("name") ?? "").trim().toLowerCase() === "viewport",
+  );
 
   return {
-    title: findFirstTagContent(html, "title"),
-    metaDescription: findMetaContent(html, "description"),
-    canonicalUrl: findCanonical(html),
-    htmlLang: findHtmlLang(html),
-    viewportContent: findMetaContent(html, "viewport"),
-    h1Texts: findAllTagContents(html, "h1"),
-    h2Texts: findAllTagContents(html, "h2"),
-    h3Texts: findAllTagContents(html, "h3"),
-    links,
-    images,
-    buttons,
-    forms,
+    parser: "CHEERIO_PARSE5",
+    document: {
+      hasHtml: $("html").length > 0,
+      hasHead: $("head").length > 0,
+      hasBody: $("body").length > 0,
+    },
+    title: titleElements.length ? normalizeText(titleElements.first().text()) || null : null,
+    titleCount: titleElements.length,
+    metaDescription: nullableAttribute(descriptionElements.first().attr("content")),
+    metaDescriptionCount: descriptionElements.length,
+    metaRobots: nullableAttribute(robotsElements.first().attr("content")),
+    canonicalUrl: nullableAttribute(canonicalElements.first().attr("href")),
+    canonicalCount: canonicalElements.length,
+    htmlLang: nullableAttribute($("html").first().attr("lang")),
+    viewportContent: nullableAttribute(viewportElements.first().attr("content")),
+    headings,
+    h1Texts: headings.filter((heading) => heading.level === 1).map((heading) => heading.text),
+    h2Texts: headings.filter((heading) => heading.level === 2).map((heading) => heading.text),
+    h3Texts: headings.filter((heading) => heading.level === 3).map((heading) => heading.text),
+    links: extractLinks($),
+    images: extractImages($),
+    buttons: extractButtons($),
+    forms: extractForms($),
+    landmarks: {
+      headerCount: $("header").length,
+      navCount: $("nav").length,
+      mainCount: $("main").length,
+      footerCount: $("footer").length,
+      asideCount: $("aside").length,
+    },
     jsonLdBlocks,
+    jsonLdBlockCount: jsonLdBlocks.length,
+    scriptCount: $("script").length,
+    iframeCount: $("iframe").length,
+    bodyTextCharacterCount: bodyText.length,
+    bodyTextWordCount: wordCount(bodyText),
   };
 }
