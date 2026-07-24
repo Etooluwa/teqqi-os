@@ -1,0 +1,196 @@
+import "server-only";
+
+import { getGooglePlacesEnv } from "@/lib/env/server";
+import type {
+  BusinessSearchInput,
+  BusinessSearchProviderResponse,
+  ProviderBusinessResult,
+} from "@/lib/business-discovery/types";
+
+const GOOGLE_TEXT_SEARCH_URL =
+  "https://places.googleapis.com/v1/places:searchText";
+
+const FIELD_MASK = [
+  "places.id",
+  "places.displayName",
+  "places.formattedAddress",
+  "places.nationalPhoneNumber",
+  "places.websiteUri",
+  "places.rating",
+  "places.location",
+  "places.businessStatus",
+  "nextPageToken",
+].join(",");
+
+const GOOGLE_MAX_RESULTS = 60;
+const GOOGLE_MAX_PAGE_SIZE = 20;
+
+type GooglePlace = {
+  id?: string;
+  displayName?: {
+    text?: string;
+  };
+  formattedAddress?: string;
+  nationalPhoneNumber?: string;
+  websiteUri?: string;
+  rating?: number;
+  location?: {
+    latitude?: number;
+    longitude?: number;
+  };
+  businessStatus?: string;
+};
+
+type GoogleTextSearchResponse = {
+  places?: GooglePlace[];
+  nextPageToken?: string;
+};
+
+export class GooglePlacesError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly responseBody?: string,
+  ) {
+    super(message);
+    this.name = "GooglePlacesError";
+  }
+}
+
+function validateInput(input: BusinessSearchInput): BusinessSearchInput {
+  const industry = input.industry.trim();
+  const location = input.location.trim();
+
+  if (!industry) {
+    throw new Error("Industry is required.");
+  }
+
+  if (!location) {
+    throw new Error("Location is required.");
+  }
+
+  if (!Number.isInteger(input.maxResults) || input.maxResults < 1) {
+    throw new Error("maxResults must be a positive integer.");
+  }
+
+  if (input.maxResults > GOOGLE_MAX_RESULTS) {
+    throw new Error(
+      `maxResults cannot exceed ${GOOGLE_MAX_RESULTS} for Google Text Search.`,
+    );
+  }
+
+  return {
+    industry,
+    location,
+    maxResults: input.maxResults,
+  };
+}
+
+function toProviderResult(
+  place: GooglePlace,
+  resultPosition: number,
+): ProviderBusinessResult | null {
+  const externalId = place.id?.trim();
+  const name = place.displayName?.text?.trim();
+
+  if (!externalId || !name) {
+    return null;
+  }
+
+  return {
+    provider: "GOOGLE_PLACES",
+    externalId,
+    name,
+    websiteUrl: place.websiteUri ?? null,
+    phone: place.nationalPhoneNumber ?? null,
+    formattedAddress: place.formattedAddress ?? null,
+    latitude: place.location?.latitude ?? null,
+    longitude: place.location?.longitude ?? null,
+    rating: place.rating ?? null,
+    providerStatus: place.businessStatus ?? null,
+    resultPosition,
+  };
+}
+
+async function fetchSearchPage(params: {
+  query: string;
+  pageSize: number;
+  pageToken?: string;
+}): Promise<GoogleTextSearchResponse> {
+  const { googlePlacesApiKey } = getGooglePlacesEnv();
+
+  const response = await fetch(GOOGLE_TEXT_SEARCH_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": googlePlacesApiKey,
+      "X-Goog-FieldMask": FIELD_MASK,
+    },
+    body: JSON.stringify({
+      textQuery: params.query,
+      pageSize: params.pageSize,
+      ...(params.pageToken ? { pageToken: params.pageToken } : {}),
+    }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new GooglePlacesError(
+      `Google Places request failed with status ${response.status}.`,
+      response.status,
+      responseBody,
+    );
+  }
+
+  return (await response.json()) as GoogleTextSearchResponse;
+}
+
+export async function searchGooglePlaces(
+  rawInput: BusinessSearchInput,
+): Promise<BusinessSearchProviderResponse> {
+  const input = validateInput(rawInput);
+  const query = `${input.industry} in ${input.location}`;
+
+  const uniquePlaces = new Map<string, ProviderBusinessResult>();
+  let nextPageToken: string | undefined;
+
+  do {
+    const remaining = input.maxResults - uniquePlaces.size;
+    const pageSize = Math.min(GOOGLE_MAX_PAGE_SIZE, remaining);
+
+    const page = await fetchSearchPage({
+      query,
+      pageSize,
+      pageToken: nextPageToken,
+    });
+
+    for (const place of page.places ?? []) {
+      if (uniquePlaces.size >= input.maxResults) {
+        break;
+      }
+
+      if (!place.id || uniquePlaces.has(place.id)) {
+        continue;
+      }
+
+      const normalized = toProviderResult(place, uniquePlaces.size + 1);
+
+      if (normalized) {
+        uniquePlaces.set(normalized.externalId, normalized);
+      }
+    }
+
+    nextPageToken = page.nextPageToken;
+  } while (nextPageToken && uniquePlaces.size < input.maxResults);
+
+  const results = Array.from(uniquePlaces.values());
+
+  return {
+    query,
+    provider: "GOOGLE_PLACES",
+    requestedMaxResults: input.maxResults,
+    returnedResults: results.length,
+    results,
+  };
+}
