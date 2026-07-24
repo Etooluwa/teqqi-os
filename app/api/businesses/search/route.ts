@@ -31,8 +31,6 @@ export async function POST(request: Request) {
     const input = parseInput(body);
     const query = `${input.industry} in ${input.location}`;
 
-    // Snapshot all Google Place IDs previously returned by TEQQI OS before
-    // creating this execution. New discovery searches exclude every one.
     const previouslyDiscovered = await getPreviouslyDiscoveredPlaceIds();
     searchId = await createSearchExecution(input, query);
     const result = await searchGooglePlaces(input, previouslyDiscovered);
@@ -40,7 +38,10 @@ export async function POST(request: Request) {
     await storeSearchPlaceReferences(searchId, result.results);
     await finalizeSearchExecution({
       searchId,
-      status: result.returnedResults < input.maxResults ? "PARTIAL" : "COMPLETED",
+      // Fewer results because Google exhausted the available unseen results is
+      // still a successful, complete search. PARTIAL is reserved for an actual
+      // interrupted provider/pagination execution.
+      status: "COMPLETED",
       resultCount: result.returnedResults,
     });
 
