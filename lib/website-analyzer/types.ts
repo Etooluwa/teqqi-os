@@ -146,6 +146,27 @@ export type PageFacts = {
   iframeCount: number;
   bodyTextCharacterCount: number;
   bodyTextWordCount: number;
+  bodyTextSample: string;
+};
+
+export type TechnicalHealthRuleId =
+  | "TECH-001"
+  | "TECH-002"
+  | "TECH-003"
+  | "TECH-004"
+  | "TECH-005"
+  | `TECH-${string}`;
+
+export type AnalyzerFinding = {
+  ruleId: TechnicalHealthRuleId | string;
+  category: AnalyzerCategory;
+  status: RuleStatus;
+  confidence: ConfidenceLevel;
+  applicable: boolean;
+  summary: string;
+  result: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  detectorVersion: string;
 };
 
 export type AnalyzerAuditEnvelope = {
@@ -175,9 +196,10 @@ export type AnalyzerFetchParseResponse = {
   status: "RUNNING";
   target: ValidatedWebsiteTarget;
   fetch: Omit<HtmlFetchResult, "html">;
-  pageFacts: PageFacts;
-  implementationStage: "FETCH_AND_PARSE";
-  nextStage: "TECHNICAL_HEALTH_RULES";
+  pageFacts: PageFacts | null;
+  technicalHealthFindings: AnalyzerFinding[];
+  implementationStage: "TECHNICAL_HEALTH_BATCH_1";
+  nextStage: "TECHNICAL_HEALTH_BATCH_2";
 };
 
 export type AnalyzerErrorResponse = {
