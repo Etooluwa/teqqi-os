@@ -1,0 +1,10 @@
+export const WEBSITE_ANALYZER_VERSION = "1.0.0" as const;
+
+export const ACTIVE_ANALYZER_CATALOGUES = {
+  TECHNICAL_HEALTH: "2.0",
+  SEO: "1.0",
+  PERFORMANCE: "1.0",
+  CONVERSION_UX: "1.0",
+  ACCESSIBILITY: "1.0",
+  CONTENT_QUALITY: "1.0",
+} as const;
