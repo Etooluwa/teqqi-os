@@ -135,7 +135,7 @@ export async function persistWebsiteScoringRun(
 
     await supabaseRest<CategoryRow[]>("/website_scoring_category_results", {
       method: "POST",
-      headers: { Prefer: "return=minimal" },
+      headers: { Prefer: "return=representation" },
       body: rows,
     });
   } catch (error) {
