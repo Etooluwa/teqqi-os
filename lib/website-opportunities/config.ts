@@ -1,3 +1,4 @@
+import type { AnalyzerCategory } from "@/lib/website-analyzer/types";
 import type { WebsiteOpportunityType, WebsiteServiceId } from "./types";
 
 export const OPPORTUNITY_ENGINE_VERSION = "1.0.0" as const;
@@ -37,3 +38,40 @@ export const PROHIBITED_WEBSITE_ONLY_SERVICE_IDS = [
   "BOOKING_SYSTEM",
   "ECOMMERCE",
 ] as const;
+
+export const ANALYZER_RULE_RANGES: Readonly<
+  Record<AnalyzerCategory, { prefix: string; count: number }>
+> = {
+  TECHNICAL_HEALTH: { prefix: "TECH", count: 38 },
+  SEO: { prefix: "SEO", count: 24 },
+  PERFORMANCE: { prefix: "PERF", count: 16 },
+  CONVERSION_UX: { prefix: "CUX", count: 22 },
+  ACCESSIBILITY: { prefix: "A11Y", count: 22 },
+  CONTENT_QUALITY: { prefix: "CONTENT", count: 18 },
+};
+
+export const CATEGORY_DEFAULT_OPPORTUNITY: Readonly<
+  Partial<Record<AnalyzerCategory, WebsiteOpportunityType>>
+> = {
+  SEO: "SEO_IMPROVEMENT",
+  PERFORMANCE: "PERFORMANCE_OPTIMIZATION",
+  CONVERSION_UX: "CONVERSION_UX_IMPROVEMENT",
+  ACCESSIBILITY: "ACCESSIBILITY_REMEDIATION",
+  CONTENT_QUALITY: "CONTENT_IMPROVEMENT",
+};
+
+export const SECURITY_CONFIGURATION_RULE_IDS: ReadonlySet<string> = new Set([
+  "TECH-006",
+  "TECH-007",
+  "TECH-008",
+  "TECH-009",
+  "TECH-010",
+]);
+
+export const MOBILE_EXPERIENCE_RULE_IDS: ReadonlySet<string> = new Set([
+  "TECH-025",
+  "TECH-026",
+  "TECH-027",
+  "TECH-028",
+  "TECH-029",
+]);
