@@ -5,11 +5,13 @@ import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
 import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { collectLinkIntegrityEvidence } from "@/lib/website-analyzer/link-integrity";
+import { collectMobileUsabilityEvidence } from "@/lib/website-analyzer/mobile-usability";
 import { runTechnicalHealthBatch1 } from "@/lib/website-analyzer/technical-health/batch1";
 import { runTechnicalHealthBatch2 } from "@/lib/website-analyzer/technical-health/batch2";
 import { runTechnicalHealthBatch3 } from "@/lib/website-analyzer/technical-health/batch3";
 import { runTechnicalHealthBatch4 } from "@/lib/website-analyzer/technical-health/batch4";
 import { runTechnicalHealthBatch5 } from "@/lib/website-analyzer/technical-health/batch5";
+import { runTechnicalHealthBatch6 } from "@/lib/website-analyzer/technical-health/batch6";
 import { collectTransportSecurityEvidence } from "@/lib/website-analyzer/transport";
 import type { AnalyzerFetchParseResponse, HtmlFetchResult, RedirectConsistencyEvidence, ValidatedWebsiteTarget } from "@/lib/website-analyzer/types";
 import { validateWebsiteUrl } from "@/lib/website-analyzer/url";
@@ -43,6 +45,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const target = await validateWebsiteUrl(rawUrl);
   const [fetchResult, transportSecurity] = await Promise.all([fetchHomepageWithHttpFallback(target), collectTransportSecurityEvidence(target)]);
   const pageFacts = responseAppearsHtml(fetchResult.contentType, fetchResult.html) ? extractPageFacts(fetchResult.html) : null;
+  const mobileUsability = pageFacts ? collectMobileUsabilityEvidence(fetchResult.html) : null;
   const redirectConsistency = buildRedirectConsistencyEvidence(rawUrl, target, fetchResult);
   const crawlability = await collectCrawlabilityEvidence({ finalUrl: fetchResult.finalUrl, homepageFacts: pageFacts });
   const linkIntegrity = await collectLinkIntegrityEvidence({ finalUrl: fetchResult.finalUrl, homepageFacts: pageFacts, crawlability });
@@ -52,7 +55,8 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const batch3Findings = runTechnicalHealthBatch3(redirectConsistency);
   const batch4Findings = runTechnicalHealthBatch4({ evidence: crawlability, homepageFacts: pageFacts });
   const batch5Findings = runTechnicalHealthBatch5({ evidence: linkIntegrity, homepageFacts: pageFacts });
+  const batch6Findings = runTechnicalHealthBatch6({ evidence: mobileUsability, pageFacts });
 
   const fetchMetadata = { requestedUrl: fetchResult.requestedUrl, finalUrl: fetchResult.finalUrl, status: fetchResult.status, contentType: fetchResult.contentType, redirectCount: fetchResult.redirectCount, redirects: fetchResult.redirects, byteLength: fetchResult.byteLength, fetchedAt: fetchResult.fetchedAt };
-  return { ok: true, analyzerVersion: WEBSITE_ANALYZER_VERSION, status: "RUNNING", target, fetch: fetchMetadata, pageFacts, transportSecurity, redirectConsistency, crawlability, linkIntegrity, technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings], implementationStage: "TECHNICAL_HEALTH_BATCH_5", nextStage: "TECHNICAL_HEALTH_BATCH_6" };
+  return { ok: true, analyzerVersion: WEBSITE_ANALYZER_VERSION, status: "RUNNING", target, fetch: fetchMetadata, pageFacts, transportSecurity, redirectConsistency, crawlability, linkIntegrity, mobileUsability, technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings, ...batch6Findings], implementationStage: "TECHNICAL_HEALTH_BATCH_6", nextStage: "TECHNICAL_HEALTH_BATCH_7" };
 }
