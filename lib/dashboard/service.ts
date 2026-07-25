@@ -25,6 +25,12 @@ const PRIORITY_RANK = {
   LOW: 1,
 } as const;
 
+const CONFIDENCE_RANK = {
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1,
+} as const;
+
 type OpportunityRunRow = {
   id: string;
   scoring_run_id: string;
@@ -32,6 +38,11 @@ type OpportunityRunRow = {
   result: WebsiteOpportunityEngineResult;
   status: "COMPLETED" | "FAILED";
   created_at: string;
+};
+
+type ScoringRunRow = {
+  id: string;
+  website_score: string | number | null;
 };
 
 export class DashboardDataError extends Error {
@@ -48,6 +59,12 @@ function canonicalDomain(url: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function numericScore(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
 }
 
 function toSearchSummary(search: {
@@ -74,10 +91,8 @@ function bestOpportunity(result: WebsiteOpportunityEngineResult): DashboardBestO
   const sorted = [...result.opportunities].sort((a, b) => {
     const priorityDelta = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
     if (priorityDelta !== 0) return priorityDelta;
-    if (a.confidence !== b.confidence) {
-      const confidenceRank = { HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
-      return confidenceRank[b.confidence] - confidenceRank[a.confidence];
-    }
+    const confidenceDelta = CONFIDENCE_RANK[b.confidence] - CONFIDENCE_RANK[a.confidence];
+    if (confidenceDelta !== 0) return confidenceDelta;
     return a.opportunityId.localeCompare(b.opportunityId);
   });
 
@@ -106,19 +121,35 @@ async function loadLatestOpportunityRuns(): Promise<Map<string, OpportunityRunRo
   return byDomain;
 }
 
-function buildSummary(rows: readonly DashboardBusinessRow[]): DashboardMarketSummary {
+async function loadScoringRuns(): Promise<Map<string, number | null>> {
+  const rows = await supabaseRest<ScoringRunRow[]>(
+    "/website_scoring_runs?status=eq.COMPLETED&select=id,website_score&order=created_at.desc&limit=1000",
+  );
+  return new Map(rows.map((row) => [row.id, numericScore(row.website_score)]));
+}
+
+function buildSummary(
+  rows: readonly DashboardBusinessRow[],
+  resultByOpportunityRunId: ReadonlyMap<string, WebsiteOpportunityEngineResult>,
+): DashboardMarketSummary {
   const analyzed = rows.filter((row) => row.intelligenceAvailable);
   const scores = analyzed
     .map((row) => row.websiteScore)
     .filter((score): score is number => typeof score === "number");
 
-  const serviceCounts = new Map<string, number>();
+  const serviceCounts = new Map<DashboardMarketSummary["opportunityCountsByService"][number]["service"], number>();
   let totalOpportunities = 0;
+
   for (const row of analyzed) {
     totalOpportunities += row.opportunityCount;
-    if (row.bestOpportunity) {
-      const service = row.bestOpportunity.recommendedService;
-      serviceCounts.set(service, (serviceCounts.get(service) ?? 0) + 1);
+    const result = row.opportunityRunId
+      ? resultByOpportunityRunId.get(row.opportunityRunId)
+      : undefined;
+    for (const opportunity of result?.opportunities ?? []) {
+      serviceCounts.set(
+        opportunity.recommendedService,
+        (serviceCounts.get(opportunity.recommendedService) ?? 0) + 1,
+      );
     }
   }
 
@@ -133,7 +164,7 @@ function buildSummary(rows: readonly DashboardBusinessRow[]): DashboardMarketSum
         ? null
         : Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) / 100,
     opportunityCountsByService: [...serviceCounts.entries()]
-      .map(([service, count]) => ({ service: service as DashboardMarketSummary["opportunityCountsByService"][number]["service"], count }))
+      .map(([service, count]) => ({ service, count }))
       .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service)),
     leadScoringAvailable: false,
   };
@@ -155,10 +186,15 @@ export async function buildOpportunityDashboardSnapshot(
     throw new DashboardDataError("The requested business discovery search was not found.");
   }
 
-  const [references, latestOpportunityRuns] = await Promise.all([
+  const [references, latestOpportunityRuns, scoringRuns] = await Promise.all([
     getSearchPlaceReferences(selectedSearch.id),
     loadLatestOpportunityRuns(),
+    loadScoringRuns(),
   ]);
+
+  const resultByOpportunityRunId = new Map(
+    [...latestOpportunityRuns.values()].map((run) => [run.id, run.result] as const),
+  );
 
   const businesses: DashboardBusinessRow[] = await Promise.all(
     references.map(async (reference) => {
@@ -180,7 +216,7 @@ export async function buildOpportunityDashboardSnapshot(
           intelligenceAvailable: Boolean(result),
           opportunityRunId: run?.id ?? null,
           scoringRunId: run?.scoring_run_id ?? null,
-          websiteScore: result?.opportunities[0]?.websiteScore ?? null,
+          websiteScore: run ? scoringRuns.get(run.scoring_run_id) ?? null : null,
           bestOpportunity: result ? bestOpportunity(result) : null,
           opportunityCount: result?.opportunityCount ?? 0,
           leadScore: {
@@ -217,11 +253,13 @@ export async function buildOpportunityDashboardSnapshot(
     }),
   );
 
+  const orderedBusinesses = businesses.sort((a, b) => a.resultPosition - b.resultPosition);
+
   return {
     dashboardVersion: DASHBOARD_VERSION,
     market: toSearchSummary(selectedSearch),
-    summary: buildSummary(businesses),
-    businesses: businesses.sort((a, b) => a.resultPosition - b.resultPosition),
+    summary: buildSummary(orderedBusinesses, resultByOpportunityRunId),
+    businesses: orderedBusinesses,
     searchHistory: searchHistoryRows.map(toSearchSummary),
     dataNotes: {
       googlePlaceContentPersisted: false,
