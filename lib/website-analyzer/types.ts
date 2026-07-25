@@ -73,6 +73,29 @@ export type TechnicalHygieneEvidence = {
 export type SeoPageEvidence = { url: string; finalUrl: string; isHomepage: boolean; depth: number; statusCode: number; facts: PageFacts };
 export type SeoEvidence = { pages: SeoPageEvidence[]; pageCount: number; crawlTruncated: boolean };
 
+export type PerformanceAuditEvidence = {
+  id: string;
+  score: number | null;
+  numericValue: number | null;
+  numericUnit: string | null;
+  displayValue: string | null;
+  title: string | null;
+  description: string | null;
+  details: Record<string, unknown> | null;
+};
+export type PerformanceEvidence = {
+  source: "PAGESPEED_INSIGHTS_LIGHTHOUSE";
+  strategy: "mobile";
+  available: boolean;
+  analyzedUrl: string;
+  finalUrl: string | null;
+  analysisTimestamp: string | null;
+  lighthouseVersion: string | null;
+  performanceScore: number | null;
+  audits: Record<string, PerformanceAuditEvidence>;
+  error: string | null;
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001" | "TECH-002" | "TECH-003" | "TECH-004" | "TECH-005" | "TECH-006" | "TECH-007"
   | "TECH-008" | "TECH-009" | "TECH-010" | "TECH-011" | "TECH-012" | "TECH-013" | "TECH-014"
@@ -84,8 +107,12 @@ export type SeoRuleId =
   | "SEO-009" | "SEO-010" | "SEO-011" | "SEO-012" | "SEO-013" | "SEO-014" | "SEO-015" | "SEO-016"
   | "SEO-017" | "SEO-018" | "SEO-019" | "SEO-020" | "SEO-021" | "SEO-022" | "SEO-023" | "SEO-024"
   | `SEO-${string}`;
+export type PerformanceRuleId =
+  | "PERF-001" | "PERF-002" | "PERF-003" | "PERF-004" | "PERF-005" | "PERF-006" | "PERF-007" | "PERF-008"
+  | "PERF-009" | "PERF-010" | "PERF-011" | "PERF-012" | "PERF-013" | "PERF-014" | "PERF-015" | "PERF-016"
+  | `PERF-${string}`;
 
-export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | SeoRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
+export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | SeoRuleId | PerformanceRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
 export type AnalyzerAuditEnvelope = { analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; requestedUrl: string; normalizedUrl: string; createdAt: string };
 export type AnalyzeWebsiteRequest = { url: string };
 export type AnalyzerFoundationResponse = { ok: true; analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; target: ValidatedWebsiteTarget; implementationStage: "ANALYZER_FOUNDATION"; nextStage: "FETCH_AND_PARSE" };
@@ -93,7 +120,7 @@ export type AnalyzerFetchParseResponse = {
   ok: true; analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: "RUNNING"; target: ValidatedWebsiteTarget;
   fetch: Omit<HtmlFetchResult, "html">; pageFacts: PageFacts | null; transportSecurity: TransportSecurityEvidence;
   redirectConsistency: RedirectConsistencyEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobileUsability: MobileUsabilityEvidence | null; technicalHygiene: TechnicalHygieneEvidence;
-  seoEvidence: SeoEvidence; technicalHealthFindings: AnalyzerFinding[]; seoFindings: AnalyzerFinding[];
-  implementationStage: "SEO_COMPLETE"; nextStage: "PERFORMANCE";
+  seoEvidence: SeoEvidence; performanceEvidence: PerformanceEvidence; technicalHealthFindings: AnalyzerFinding[]; seoFindings: AnalyzerFinding[]; performanceFindings: AnalyzerFinding[];
+  implementationStage: "PERFORMANCE_COMPLETE"; nextStage: "CONVERSION_UX";
 };
 export type AnalyzerErrorResponse = { ok: false; error: { code: AnalyzerFailureCode; message: string } };
