@@ -21,7 +21,7 @@ export class WebsiteOpportunityError extends Error {
 
 function expectedRuleId(ruleId: string, category: OpportunityFindingInput["category"]): boolean {
   const range = ANALYZER_RULE_RANGES[category];
-  const match = ruleId.match(/^([A-Z]+)-(\d{3})$/);
+  const match = ruleId.match(/^([A-Z0-9]+)-(\d{3})$/);
   if (!match || match[1] !== range.prefix) return false;
   const ordinal = Number(match[2]);
   return Number.isInteger(ordinal) && ordinal >= 1 && ordinal <= range.count;
