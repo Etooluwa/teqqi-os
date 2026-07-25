@@ -37,7 +37,7 @@ export type RedirectConsistencyEvidence = { requestedUrl: string; normalizedUrl:
 export type RobotsEvidence = { url: string; reachable: boolean; statusCode: number | null; contentType: string | null; bodySample: string; userAgentStarPresent: boolean; globallyBlocked: boolean | null; sitemapUrls: string[]; error: string | null };
 export type SitemapUrlProbe = { url: string; reachable: boolean; statusCode: number | null; finalUrl: string | null; error: string | null };
 export type SitemapEvidence = { candidates: string[]; selectedUrl: string | null; present: boolean; statusCode: number | null; validXml: boolean; sitemapType: "urlset" | "sitemapindex" | "unknown" | null; discoveredUrls: string[]; checkedUrls: SitemapUrlProbe[]; error: string | null };
-export type CrawledPageEvidence = { url: string; finalUrl: string | null; depth: number; reachable: boolean; statusCode: number | null; html: boolean; discoveredInternalLinks: number; links?: LinkFact[]; error: string | null };
+export type CrawledPageEvidence = { url: string; finalUrl: string | null; depth: number; reachable: boolean; statusCode: number | null; html: boolean; discoveredInternalLinks: number; links?: LinkFact[]; pageFacts?: PageFacts | null; error: string | null };
 export type InternalCrawlEvidence = { maxPages: number; maxDepth: number; attemptedPages: number; reachablePages: number; htmlPages: number; pages: CrawledPageEvidence[]; truncated: boolean };
 export type CrawlabilityEvidence = { robots: RobotsEvidence; sitemap: SitemapEvidence; internalCrawl: InternalCrawlEvidence };
 
@@ -70,14 +70,30 @@ export type TechnicalHygieneEvidence = {
   firstPartyResources: { totalReferences: number; probedCount: number; failedCount: number; unknownCount: number; probes: TechnicalResourceProbe[]; probeLimit: number; truncated: boolean };
 };
 
+export type SeoPageEvidence = {
+  url: string;
+  finalUrl: string;
+  isHomepage: boolean;
+  depth: number;
+  statusCode: number;
+  facts: PageFacts;
+};
+
+export type SeoEvidence = {
+  pages: SeoPageEvidence[];
+  pageCount: number;
+  crawlTruncated: boolean;
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001" | "TECH-002" | "TECH-003" | "TECH-004" | "TECH-005" | "TECH-006" | "TECH-007"
   | "TECH-008" | "TECH-009" | "TECH-010" | "TECH-011" | "TECH-012" | "TECH-013" | "TECH-014"
   | "TECH-015" | "TECH-016" | "TECH-017" | "TECH-018" | "TECH-019" | "TECH-020" | "TECH-021"
   | "TECH-022" | "TECH-023" | "TECH-024" | "TECH-025" | "TECH-026" | "TECH-027" | "TECH-028" | "TECH-029"
   | "TECH-030" | "TECH-031" | "TECH-032" | "TECH-033" | "TECH-034" | "TECH-035" | "TECH-036" | "TECH-037" | "TECH-038" | `TECH-${string}`;
+export type SeoRuleId = "SEO-001" | "SEO-002" | "SEO-003" | "SEO-004" | "SEO-005" | "SEO-006" | `SEO-${string}`;
 
-export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
+export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | SeoRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
 export type AnalyzerAuditEnvelope = { analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; requestedUrl: string; normalizedUrl: string; createdAt: string };
 export type AnalyzeWebsiteRequest = { url: string };
 export type AnalyzerFoundationResponse = { ok: true; analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; target: ValidatedWebsiteTarget; implementationStage: "ANALYZER_FOUNDATION"; nextStage: "FETCH_AND_PARSE" };
@@ -85,6 +101,7 @@ export type AnalyzerFetchParseResponse = {
   ok: true; analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: "RUNNING"; target: ValidatedWebsiteTarget;
   fetch: Omit<HtmlFetchResult, "html">; pageFacts: PageFacts | null; transportSecurity: TransportSecurityEvidence;
   redirectConsistency: RedirectConsistencyEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobileUsability: MobileUsabilityEvidence | null; technicalHygiene: TechnicalHygieneEvidence;
-  technicalHealthFindings: AnalyzerFinding[]; implementationStage: "TECHNICAL_HEALTH_BATCH_7"; nextStage: "TECHNICAL_HEALTH_COMPLETE";
+  seoEvidence: SeoEvidence; technicalHealthFindings: AnalyzerFinding[]; seoFindings: AnalyzerFinding[];
+  implementationStage: "SEO_BATCH_1"; nextStage: "SEO_BATCH_2";
 };
 export type AnalyzerErrorResponse = { ok: false; error: { code: AnalyzerFailureCode; message: string } };
