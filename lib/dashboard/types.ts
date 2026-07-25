@@ -33,16 +33,13 @@ export type DashboardBusinessRow = {
   leadScore: DashboardLeadScore;
 };
 
-export type DashboardServiceCount = {
-  service: WebsiteServiceId;
-  count: number;
+export type DashboardRankedBusinessRow = DashboardBusinessRow & {
+  rank: number;
+  rankingReason: string;
 };
 
-export type DashboardPriorityCount = {
-  priority: OpportunityPriority;
-  count: number;
-};
-
+export type DashboardServiceCount = { service: WebsiteServiceId; count: number };
+export type DashboardPriorityCount = { priority: OpportunityPriority; count: number };
 export type DashboardScoreBand = {
   band: "CRITICAL" | "WEAK" | "FAIR" | "STRONG";
   label: "0–39" | "40–59" | "60–79" | "80–100";
@@ -84,6 +81,7 @@ export type OpportunityDashboardSnapshot = {
   market: DashboardSearchSummary;
   summary: DashboardMarketSummary;
   businesses: DashboardBusinessRow[];
+  rankedBusinesses: DashboardRankedBusinessRow[];
   searchHistory: DashboardSearchSummary[];
   dataNotes: {
     googlePlaceContentPersisted: false;
