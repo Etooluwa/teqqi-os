@@ -33,10 +33,6 @@ function normalizeDuplicateText(value: string): string {
     .trim();
 }
 
-function homepage(pages: SeoPageEvidence[]): SeoPageEvidence | undefined {
-  return pages.find((page) => page.isHomepage);
-}
-
 function affectedRatio(affected: number, total: number): number {
   return total > 0 ? affected / total : 0;
 }
