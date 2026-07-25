@@ -18,7 +18,7 @@ function range(prefix, count) {
 }
 
 const categories = [
-  { key: "technicalFindings", name: "Technical Health", category: "TECHNICAL_HEALTH", ids: range("TECH", 38) },
+  { key: "technicalHealthFindings", name: "Technical Health", category: "TECHNICAL_HEALTH", ids: range("TECH", 38) },
   { key: "seoFindings", name: "SEO", category: "SEO", ids: range("SEO", 24) },
   { key: "performanceFindings", name: "Performance", category: "PERFORMANCE", ids: range("PERF", 16) },
   { key: "conversionUxFindings", name: "Conversion/UX", category: "CONVERSION_UX", ids: range("CUX", 22) },
