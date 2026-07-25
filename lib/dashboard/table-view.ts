@@ -1,3 +1,4 @@
+import { WEBSITE_SERVICE_BY_OPPORTUNITY } from "@/lib/website-opportunities/config";
 import type { OpportunityPriority, RecommendationConfidence, WebsiteServiceId } from "@/lib/website-opportunities/types";
 import type { DashboardRankedBusinessRow } from "./types";
 
@@ -23,6 +24,7 @@ export type DashboardTableView = {
 
 const priorities = new Set(["CRITICAL", "HIGH", "MEDIUM", "LOW"]);
 const confidences = new Set(["HIGH", "MEDIUM", "LOW"]);
+const services = new Set<string>(Object.values(WEBSITE_SERVICE_BY_OPPORTUNITY));
 const analysisFilters = new Set(["ALL", "ANALYZED", "NOT_ANALYZED", "HAS_WEBSITE", "NO_WEBSITE"]);
 const sorts = new Set(["RANK", "WEBSITE_SCORE_ASC", "WEBSITE_SCORE_DESC", "OPPORTUNITY_COUNT_DESC", "BUSINESS_NAME_ASC", "GOOGLE_RATING_DESC"]);
 
@@ -44,6 +46,7 @@ export function parseDashboardTableView(searchParams: URLSearchParams): Dashboar
 
   if (priority && !priorities.has(priority)) throw new Error("Invalid priority filter.");
   if (confidence && !confidences.has(confidence)) throw new Error("Invalid confidence filter.");
+  if (service && !services.has(service)) throw new Error("Invalid service filter.");
   if (analysis && !analysisFilters.has(analysis)) throw new Error("Invalid analysis filter.");
   if (sort && !sorts.has(sort)) throw new Error("Invalid dashboard sort.");
   validateScore("minScore", minScore);
