@@ -7,7 +7,7 @@ export type WebsiteOpportunityType =
   | "MOBILE_EXPERIENCE"
   | "ACCESSIBILITY_REMEDIATION"
   | "CONVERSION_UX_IMPROVEMENT"
-  | "CONTENT_IMPROVEMENT"
+  | "CONTENT_IMROVEMENT"
   | "SEO_IMPROVEMENT"
   | "SECURITY_CONFIGURATION";
 
@@ -61,6 +61,28 @@ export type OpportunityDetectionResult = {
   eligibleFindingCount: number;
   excludedFindingCount: number;
   candidates: OpportunityCandidate[];
+};
+
+export type GroupedOpportunityCandidate = {
+  groupId: string;
+  type: WebsiteOpportunityType;
+  candidateIds: string[];
+  detectionRuleIds: string[];
+  supportingFindingIds: string[];
+  categories: AnalyzerCategory[];
+  candidateCount: number;
+  failCount: number;
+  warningCount: number;
+  highConfidenceCount: number;
+  mediumConfidenceCount: number;
+};
+
+export type OpportunityGroupingResult = {
+  opportunityEngineVersion: string;
+  candidateCount: number;
+  groupCount: number;
+  duplicateCandidateCount: number;
+  groups: GroupedOpportunityCandidate[];
 };
 
 export type WebsiteOpportunity = {
