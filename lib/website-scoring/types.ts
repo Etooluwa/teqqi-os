@@ -76,3 +76,21 @@ export type CriticalCapThreshold = {
   minimumFailures: number;
   maximumWebsiteScore: number;
 };
+
+export type CriticalFailureTrigger = {
+  ruleId: string;
+  category: ScoringCategory;
+  status: "FAIL";
+  confidence: Extract<ScoringConfidence, "HIGH" | "MEDIUM">;
+};
+
+export type CriticalCapResult = {
+  scoringModelVersion: string;
+  uncappedWebsiteScore: number | null;
+  finalWebsiteScore: number | null;
+  scoreAvailable: boolean;
+  criticalFailureCount: number;
+  criticalFailures: CriticalFailureTrigger[];
+  applicableCriticalCap: number | null;
+  capApplied: boolean;
+};
