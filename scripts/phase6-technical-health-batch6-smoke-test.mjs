@@ -9,7 +9,7 @@ async function run() {
 
   const { response, data } = await analyze("https://www.wikipedia.org/");
   assert(response.ok, `Wikipedia analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_6", "Expected Batch 6 stage.");
+  assert(/^TECHNICAL_HEALTH_BATCH_[6-9]$/.test(data.implementationStage) || data.implementationStage === "TECHNICAL_HEALTH_COMPLETE", "Expected analyzer to have reached Batch 6 or later.");
   assert(Array.isArray(data.technicalHealthFindings) && data.technicalHealthFindings.length >= 29, "Expected findings through TECH-029.");
   assert(typeof data.mobileUsability === "object" && data.mobileUsability !== null, "Expected mobile-usability evidence.");
   assert(data.mobileUsability.method === "STATIC_HTML_CSS", "Expected static mobile evidence method.");
