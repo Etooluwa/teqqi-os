@@ -45,6 +45,24 @@ export type WebsiteOpportunityEngineInput = {
   scoring: OpportunityScoringContext;
 };
 
+export type OpportunityCandidate = {
+  candidateId: string;
+  detectionRuleId: string;
+  type: WebsiteOpportunityType;
+  supportingFindingIds: string[];
+  categories: AnalyzerCategory[];
+  sourceStatus: Extract<RuleStatus, "WARNING" | "FAIL">;
+  sourceConfidence: Extract<ConfidenceLevel, "HIGH" | "MEDIUM">;
+};
+
+export type OpportunityDetectionResult = {
+  opportunityEngineVersion: string;
+  evaluatedFindingCount: number;
+  eligibleFindingCount: number;
+  excludedFindingCount: number;
+  candidates: OpportunityCandidate[];
+};
+
 export type WebsiteOpportunity = {
   opportunityId: string;
   type: WebsiteOpportunityType;
