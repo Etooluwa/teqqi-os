@@ -8,10 +8,10 @@ import {
 import { getGooglePlaceDetails } from "@/lib/business-discovery/google-places";
 import { supabaseRest } from "@/lib/supabase/server";
 import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
+import { buildDashboardMarketSummary } from "./market-summary";
 import type {
   DashboardBestOpportunity,
   DashboardBusinessRow,
-  DashboardMarketSummary,
   DashboardSearchSummary,
   OpportunityDashboardSnapshot,
 } from "./types";
@@ -128,48 +128,6 @@ async function loadScoringRuns(): Promise<Map<string, number | null>> {
   return new Map(rows.map((row) => [row.id, numericScore(row.website_score)]));
 }
 
-function buildSummary(
-  rows: readonly DashboardBusinessRow[],
-  resultByOpportunityRunId: ReadonlyMap<string, WebsiteOpportunityEngineResult>,
-): DashboardMarketSummary {
-  const analyzed = rows.filter((row) => row.intelligenceAvailable);
-  const scores = analyzed
-    .map((row) => row.websiteScore)
-    .filter((score): score is number => typeof score === "number");
-
-  const serviceCounts = new Map<DashboardMarketSummary["opportunityCountsByService"][number]["service"], number>();
-  let totalOpportunities = 0;
-
-  for (const row of analyzed) {
-    totalOpportunities += row.opportunityCount;
-    const result = row.opportunityRunId
-      ? resultByOpportunityRunId.get(row.opportunityRunId)
-      : undefined;
-    for (const opportunity of result?.opportunities ?? []) {
-      serviceCounts.set(
-        opportunity.recommendedService,
-        (serviceCounts.get(opportunity.recommendedService) ?? 0) + 1,
-      );
-    }
-  }
-
-  return {
-    businessesFound: rows.length,
-    businessesWithLiveDetails: rows.filter((row) => row.detailsAvailable).length,
-    businessesWithWebsites: rows.filter((row) => Boolean(row.websiteUrl)).length,
-    businessesAnalyzed: analyzed.length,
-    totalOpportunities,
-    averageWebsiteScore:
-      scores.length === 0
-        ? null
-        : Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) / 100,
-    opportunityCountsByService: [...serviceCounts.entries()]
-      .map(([service, count]) => ({ service, count }))
-      .sort((a, b) => b.count - a.count || a.service.localeCompare(b.service)),
-    leadScoringAvailable: false,
-  };
-}
-
 export async function buildOpportunityDashboardSnapshot(
   requestedSearchId?: string,
 ): Promise<OpportunityDashboardSnapshot> {
@@ -258,7 +216,7 @@ export async function buildOpportunityDashboardSnapshot(
   return {
     dashboardVersion: DASHBOARD_VERSION,
     market: toSearchSummary(selectedSearch),
-    summary: buildSummary(orderedBusinesses, resultByOpportunityRunId),
+    summary: buildDashboardMarketSummary(orderedBusinesses, resultByOpportunityRunId),
     businesses: orderedBusinesses,
     searchHistory: searchHistoryRows.map(toSearchSummary),
     dataNotes: {
