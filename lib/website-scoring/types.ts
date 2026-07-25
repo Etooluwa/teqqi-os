@@ -40,6 +40,19 @@ export type RuleScoreResult = {
   exclusionReason: RuleScoreExclusionReason | null;
 };
 
+export type CategoryScoreResult = {
+  category: ScoringCategory;
+  score: number | null;
+  available: boolean;
+  earnedPoints: number;
+  availablePoints: number;
+  configuredRuleCount: number;
+  providedFindingCount: number;
+  includedRuleCount: number;
+  excludedRuleCount: number;
+  ruleScores: RuleScoreResult[];
+};
+
 export type CriticalCapThreshold = {
   minimumFailures: number;
   maximumWebsiteScore: number;
