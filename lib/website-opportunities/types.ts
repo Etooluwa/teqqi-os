@@ -115,12 +115,36 @@ export type WebsiteOpportunity = {
   opportunityId: string;
   type: WebsiteOpportunityType;
   title: string;
+  candidateIds: string[];
+  detectionRuleIds: string[];
   supportingFindingIds: string[];
   categories: AnalyzerCategory[];
   priority: OpportunityPriority;
   confidence: RecommendationConfidence;
+  categoryScore: number | null;
+  websiteScore: number | null;
+  criticalFailureCount: number;
   recommendedService: WebsiteServiceId;
   recommendation: string;
   explanation: string;
+  priorityReasons: string[];
+  confidenceReasons: string[];
   opportunityEngineVersion: string;
+  scoringModelVersion: string;
+};
+
+export type WebsiteOpportunityEngineResult = {
+  opportunityEngineVersion: string;
+  scoringModelVersion: string;
+  evaluatedFindingCount: number;
+  eligibleFindingCount: number;
+  excludedFindingCount: number;
+  candidateCount: number;
+  opportunityCount: number;
+  opportunities: WebsiteOpportunity[];
+  trace: {
+    detection: OpportunityDetectionResult;
+    grouping: OpportunityGroupingResult;
+    assessment: OpportunityAssessmentResult;
+  };
 };
