@@ -53,6 +53,25 @@ export type CategoryScoreResult = {
   ruleScores: RuleScoreResult[];
 };
 
+export type WeightedCategoryContribution = {
+  category: ScoringCategory;
+  score: number | null;
+  available: boolean;
+  weight: number;
+  weightedContribution: number | null;
+};
+
+export type WebsiteScoreResult = {
+  scoringModelVersion: string;
+  score: number | null;
+  available: boolean;
+  measuredWeight: number;
+  missingWeight: number;
+  measuredWeightedTotal: number;
+  categories: WeightedCategoryContribution[];
+  unavailableCategories: ScoringCategory[];
+};
+
 export type CriticalCapThreshold = {
   minimumFailures: number;
   maximumWebsiteScore: number;
