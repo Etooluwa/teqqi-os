@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildOpportunityDashboardSnapshot, DashboardDataError } from "@/lib/dashboard/service";
+import { buildDashboardTableView, parseDashboardTableView } from "@/lib/dashboard/table-view";
 
 export const runtime = "nodejs";
 
@@ -9,8 +10,10 @@ export async function GET(request: Request) {
   const searchId = searchParams.get("searchId")?.trim() || undefined;
 
   try {
+    const tableInput = parseDashboardTableView(searchParams);
     const dashboard = await buildOpportunityDashboardSnapshot(searchId);
-    return NextResponse.json({ ok: true, dashboard });
+    const tableView = buildDashboardTableView(dashboard.rankedBusinesses, tableInput);
+    return NextResponse.json({ ok: true, dashboard: { ...dashboard, tableView } });
   } catch (error) {
     if (error instanceof DashboardDataError) {
       const notFound = error.message.includes("not found");
@@ -23,6 +26,13 @@ export async function GET(request: Request) {
           },
         },
         { status: notFound ? 404 : 409 },
+      );
+    }
+
+    if (error instanceof Error && /Invalid|must be between|minScore cannot/.test(error.message)) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INVALID_DASHBOARD_FILTER", message: error.message } },
+        { status: 400 },
       );
     }
 
