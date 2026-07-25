@@ -1,3 +1,4 @@
+import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
 import type {
   DashboardBusinessRow,
   DashboardMarketSummary,
@@ -22,6 +23,7 @@ function scoreBand(score: number): DashboardScoreBand["band"] {
 
 export function buildDashboardMarketSummary(
   rows: readonly DashboardBusinessRow[],
+  resultByOpportunityRunId: ReadonlyMap<string, WebsiteOpportunityEngineResult> = new Map(),
 ): DashboardMarketSummary {
   const analyzed = rows.filter((row) => row.intelligenceAvailable);
   const scores = analyzed
@@ -45,10 +47,16 @@ export function buildDashboardMarketSummary(
     if (row.opportunityCount > 0) businessesWithOpportunities += 1;
 
     if (row.bestOpportunity) {
-      const service = row.bestOpportunity.recommendedService;
-      serviceCounts.set(service, (serviceCounts.get(service) ?? 0) + 1);
       const priority = row.bestOpportunity.priority;
       priorityCounts.set(priority, (priorityCounts.get(priority) ?? 0) + 1);
+    }
+
+    const result = row.opportunityRunId
+      ? resultByOpportunityRunId.get(row.opportunityRunId)
+      : undefined;
+    for (const opportunity of result?.opportunities ?? []) {
+      const service = opportunity.recommendedService;
+      serviceCounts.set(service, (serviceCounts.get(service) ?? 0) + 1);
     }
   }
 
