@@ -67,11 +67,25 @@ async function run() {
   const allIds = allFindings.map((finding) => finding.ruleId);
   assert(new Set(allIds).size === 140, "Expected all 140 Phase 6 rule IDs to be globally unique.");
 
-  const explicitLimitations = ["TECH-037", "CUX-019", "CUX-020", "A11Y-004", "CONTENT-003", "CONTENT-013", "CONTENT-018"];
-  for (const id of explicitLimitations) {
+  const guaranteedUnknown = [
+    "TECH-037",
+    "A11Y-009", "A11Y-010", "A11Y-011", "A11Y-012", "A11Y-013", "A11Y-014",
+    "A11Y-019", "A11Y-020", "A11Y-021", "A11Y-022",
+    "CONTENT-003", "CONTENT-013", "CONTENT-018",
+  ];
+  for (const id of guaranteedUnknown) {
     const finding = allFindings.find((item) => item.ruleId === id);
     assert(finding, `Missing limitation-sensitive rule ${id}.`);
-    assert(finding.status === "UNKNOWN" || finding.status === "NOT_APPLICABLE", `${id} must not fabricate unsupported evidence.`);
+    assert(finding.status === "UNKNOWN", `${id} should remain UNKNOWN until its required evidence is collected.`);
+    assert(finding.confidence === "LOW", `${id} limitation should use LOW confidence.`);
+  }
+
+  for (const id of ["CUX-005", "CUX-020", "CUX-021", "CUX-022"]) {
+    const finding = allFindings.find((item) => item.ruleId === id);
+    assert(finding, `Missing ${id}.`);
+    if (finding.status === "UNKNOWN") {
+      assert(finding.confidence === "LOW", `${id} rendered-evidence limitation should use LOW confidence when UNKNOWN.`);
+    }
   }
 
   if (data.performanceEvidence?.available === false) {
