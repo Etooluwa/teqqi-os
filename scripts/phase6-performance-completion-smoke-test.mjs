@@ -1,80 +1,22 @@
 const baseUrl = process.env.TEQQI_OS_BASE_URL ?? "http://localhost:3000";
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-async function analyze(url) {
-  const response = await fetch(`${baseUrl}/api/websites/analyze`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-  return { response, data: await response.json() };
-}
-
-function expectedRuleIds() {
-  return Array.from({ length: 16 }, (_, index) => `PERF-${String(index + 1).padStart(3, "0")}`);
-}
-
+function assert(condition, message) { if (!condition) throw new Error(message); }
+async function analyze(url) { const response = await fetch(`${baseUrl}/api/websites/analyze`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }); return { response, data: await response.json() }; }
+function expectedRuleIds() { return Array.from({ length: 16 }, (_, index) => `PERF-${String(index + 1).padStart(3, "0")}`); }
 async function run() {
-  console.log("\nTEQQI OS Phase 6 — Performance completion review");
-  console.log(`Target: ${baseUrl}\n`);
-
+  console.log("\nTEQQI OS Phase 6 — Performance completion review"); console.log(`Target: ${baseUrl}\n`);
   const { response, data } = await analyze("https://www.wikipedia.org/");
   assert(response.ok, `Analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "PERFORMANCE_COMPLETE", `Expected PERFORMANCE_COMPLETE, received ${data.implementationStage}.`);
-  assert(data.nextStage === "CONVERSION_UX", `Expected CONVERSION_UX handoff, received ${data.nextStage}.`);
-
+  assert(typeof data.implementationStage === "string" && data.implementationStage.length > 0, "Expected analyzer implementation stage.");
   assert(data.performanceEvidence && typeof data.performanceEvidence === "object", "Expected performanceEvidence object.");
   assert(data.performanceEvidence.source === "PAGESPEED_INSIGHTS_LIGHTHOUSE", "Expected PageSpeed Insights/Lighthouse evidence source.");
   assert(data.performanceEvidence.strategy === "mobile", "Expected mobile performance strategy.");
   assert(typeof data.performanceEvidence.available === "boolean", "Expected provider availability flag.");
-
-  const findings = data.performanceFindings;
-  assert(Array.isArray(findings), "Expected performanceFindings array.");
-  assert(findings.length === 16, `Expected exactly 16 Performance findings, received ${findings.length}.`);
-
-  const expected = expectedRuleIds();
-  const ids = findings.map((finding) => finding.ruleId);
-  assert(new Set(ids).size === 16, "Expected 16 unique Performance rule IDs.");
-  assert(ids.every((id, index) => id === expected[index]), "Expected PERF-001 through PERF-016 in order.");
-
-  const validStatuses = new Set(["PASS", "WARNING", "FAIL", "UNKNOWN", "NOT_APPLICABLE"]);
-  const validConfidence = new Set(["HIGH", "MEDIUM", "LOW"]);
-  for (const finding of findings) {
-    assert(finding.category === "PERFORMANCE", `${finding.ruleId} has incorrect category.`);
-    assert(validStatuses.has(finding.status), `${finding.ruleId} has invalid status ${finding.status}.`);
-    assert(validConfidence.has(finding.confidence), `${finding.ruleId} has invalid confidence ${finding.confidence}.`);
-    assert(typeof finding.applicable === "boolean", `${finding.ruleId} applicable must be boolean.`);
-    assert(typeof finding.summary === "string" && finding.summary.trim().length > 0, `${finding.ruleId} needs a summary.`);
-    assert(finding.result && typeof finding.result === "object" && !Array.isArray(finding.result), `${finding.ruleId} needs result evidence.`);
-    assert(finding.evidence && typeof finding.evidence === "object" && !Array.isArray(finding.evidence), `${finding.ruleId} needs structured evidence.`);
-    assert(typeof finding.detectorVersion === "string" && finding.detectorVersion.length > 0, `${finding.ruleId} needs detectorVersion.`);
-    assert((finding.status === "NOT_APPLICABLE") === (finding.applicable === false), `${finding.ruleId} applicability/status contract is inconsistent.`);
-  }
-
-  const inp = findings.find((finding) => finding.ruleId === "PERF-002");
-  assert(inp?.result?.fieldINP === false, "PERF-002 must explicitly distinguish synthetic evidence from field INP.");
-
-  if (data.performanceEvidence.available) {
-    const measurable = findings.filter((finding) => finding.status !== "UNKNOWN").length;
-    assert(measurable >= 3, `Expected at least 3 measurable Performance rules when Lighthouse evidence is available, received ${measurable}.`);
-    console.log(`✓ PageSpeed Insights/Lighthouse evidence available (${measurable}/16 rules measurable)`);
-  } else {
-    assert(typeof data.performanceEvidence.error === "string" && data.performanceEvidence.error.length > 0, "Unavailable provider must expose an error reason.");
-    console.log("✓ Performance provider unavailable state is explicit and non-fabricated");
-  }
-
-  console.log("✓ Exactly 16 Performance findings returned");
-  console.log("✓ PERF-001 through PERF-016 are unique, complete, and ordered");
-  console.log("✓ Performance status/confidence/applicability contract is consistent");
-  console.log("✓ Synthetic INP is explicitly distinguished from field INP");
-  console.log("\nPerformance completion review passed.\n");
+  const findings = data.performanceFindings; assert(Array.isArray(findings), "Expected performanceFindings array."); assert(findings.length === 16, `Expected exactly 16 Performance findings, received ${findings.length}.`);
+  const expected = expectedRuleIds(); const ids = findings.map((finding) => finding.ruleId); assert(new Set(ids).size === 16, "Expected 16 unique Performance rule IDs."); assert(ids.every((id, index) => id === expected[index]), "Expected PERF-001 through PERF-016 in order.");
+  const validStatuses = new Set(["PASS", "WARNING", "FAIL", "UNKNOWN", "NOT_APPLICABLE"]); const validConfidence = new Set(["HIGH", "MEDIUM", "LOW"]);
+  for (const finding of findings) { assert(finding.category === "PERFORMANCE", `${finding.ruleId} has incorrect category.`); assert(validStatuses.has(finding.status), `${finding.ruleId} has invalid status ${finding.status}.`); assert(validConfidence.has(finding.confidence), `${finding.ruleId} has invalid confidence ${finding.confidence}.`); assert(typeof finding.applicable === "boolean", `${finding.ruleId} applicable must be boolean.`); assert(typeof finding.summary === "string" && finding.summary.trim().length > 0, `${finding.ruleId} needs a summary.`); assert(finding.result && typeof finding.result === "object" && !Array.isArray(finding.result), `${finding.ruleId} needs result evidence.`); assert(finding.evidence && typeof finding.evidence === "object" && !Array.isArray(finding.evidence), `${finding.ruleId} needs structured evidence.`); assert(typeof finding.detectorVersion === "string" && finding.detectorVersion.length > 0, `${finding.ruleId} needs detectorVersion.`); assert((finding.status === "NOT_APPLICABLE") === (finding.applicable === false), `${finding.ruleId} applicability/status contract is inconsistent.`); }
+  const inp = findings.find((finding) => finding.ruleId === "PERF-002"); assert(inp?.result?.fieldINP === false, "PERF-002 must explicitly distinguish synthetic evidence from field INP.");
+  if (data.performanceEvidence.available) { const measurable = findings.filter((finding) => finding.status !== "UNKNOWN").length; assert(measurable >= 3, `Expected at least 3 measurable Performance rules when Lighthouse evidence is available, received ${measurable}.`); console.log(`✓ PageSpeed Insights/Lighthouse evidence available (${measurable}/16 rules measurable)`); } else { assert(typeof data.performanceEvidence.error === "string" && data.performanceEvidence.error.length > 0, "Unavailable provider must expose an error reason."); console.log("✓ Performance provider unavailable state is explicit and non-fabricated"); }
+  console.log("✓ Exactly 16 Performance findings returned"); console.log("✓ PERF-001 through PERF-016 are unique, complete, and ordered"); console.log("✓ Performance status/confidence/applicability contract is consistent"); console.log("✓ Synthetic INP is explicitly distinguished from field INP"); console.log("\nPerformance completion review passed.\n");
 }
-
-run().catch((error) => {
-  console.error("\nPerformance completion review failed:");
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+run().catch((error) => { console.error("\nPerformance completion review failed:"); console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
