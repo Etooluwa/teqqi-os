@@ -38,14 +38,34 @@ export type DashboardServiceCount = {
   count: number;
 };
 
+export type DashboardPriorityCount = {
+  priority: OpportunityPriority;
+  count: number;
+};
+
+export type DashboardScoreBand = {
+  band: "CRITICAL" | "WEAK" | "FAIR" | "STRONG";
+  label: "0–39" | "40–59" | "60–79" | "80–100";
+  count: number;
+};
+
 export type DashboardMarketSummary = {
   businessesFound: number;
   businessesWithLiveDetails: number;
   businessesWithWebsites: number;
   businessesAnalyzed: number;
+  businessesWithOpportunities: number;
   totalOpportunities: number;
   averageWebsiteScore: number | null;
+  lowestWebsiteScore: number | null;
+  highestWebsiteScore: number | null;
+  analysisCoveragePercent: number;
+  websiteCoveragePercent: number;
+  opportunityCoveragePercent: number;
   opportunityCountsByService: DashboardServiceCount[];
+  bestOpportunityCountsByPriority: DashboardPriorityCount[];
+  websiteScoreDistribution: DashboardScoreBand[];
+  topRecommendedService: DashboardServiceCount | null;
   leadScoringAvailable: false;
 };
 
