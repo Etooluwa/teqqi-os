@@ -1,5 +1,6 @@
 import "server-only";
 
+import { runAccessibilityRules } from "@/lib/website-analyzer/accessibility/rules";
 import { runConversionUxRules } from "@/lib/website-analyzer/conversion-ux/rules";
 import { collectCrawlabilityEvidence } from "@/lib/website-analyzer/crawlability";
 import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
@@ -76,6 +77,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const remainingSeoFindings = runRemainingSeoRules({ evidence: seoEvidence, crawlability });
   const performanceFindings = runPerformanceRules(performanceEvidence);
   const conversionUxFindings = runConversionUxRules({ seo: seoEvidence, crawlability, linkIntegrity, mobile: mobileUsability });
+  const accessibilityFindings = runAccessibilityRules(seoEvidence);
 
   const fetchMetadata = { requestedUrl: fetchResult.requestedUrl, finalUrl: fetchResult.finalUrl, status: fetchResult.status, contentType: fetchResult.contentType, redirectCount: fetchResult.redirectCount, redirects: fetchResult.redirects, byteLength: fetchResult.byteLength, fetchedAt: fetchResult.fetchedAt };
   return {
@@ -83,7 +85,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     transportSecurity, redirectConsistency, crawlability, linkIntegrity, mobileUsability, technicalHygiene, seoEvidence, performanceEvidence,
     technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings, ...batch6Findings, ...batch7Findings],
     seoFindings: [...seoBatch1Findings, ...seoBatch2Findings, ...seoBatch3Findings, ...remainingSeoFindings],
-    performanceFindings, conversionUxFindings,
-    implementationStage: "CONVERSION_UX_COMPLETE", nextStage: "ACCESSIBILITY",
+    performanceFindings, conversionUxFindings, accessibilityFindings,
+    implementationStage: "ACCESSIBILITY_COMPLETE", nextStage: "CONTENT_QUALITY",
   };
 }
