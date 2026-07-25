@@ -85,6 +85,32 @@ export type OpportunityGroupingResult = {
   groups: GroupedOpportunityCandidate[];
 };
 
+export type OpportunityAssessment = {
+  groupId: string;
+  type: WebsiteOpportunityType;
+  priority: OpportunityPriority;
+  confidence: RecommendationConfidence;
+  categoryScore: number | null;
+  websiteScore: number | null;
+  criticalFailureCount: number;
+  evidenceStrength: {
+    candidateCount: number;
+    failCount: number;
+    warningCount: number;
+    highConfidenceCount: number;
+    mediumConfidenceCount: number;
+  };
+  priorityReasons: string[];
+  confidenceReasons: string[];
+};
+
+export type OpportunityAssessmentResult = {
+  opportunityEngineVersion: string;
+  scoringModelVersion: string;
+  groupCount: number;
+  assessments: OpportunityAssessment[];
+};
+
 export type WebsiteOpportunity = {
   opportunityId: string;
   type: WebsiteOpportunityType;
