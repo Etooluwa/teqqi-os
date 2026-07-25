@@ -46,6 +46,23 @@ export const CRITICAL_CAP_THRESHOLDS: readonly CriticalCapThreshold[] = [
   { minimumFailures: 1, maximumWebsiteScore: 80 },
 ] as const;
 
+// Critical caps are intentionally limited to foundational Technical Health
+// failures. Other severe findings still affect their category score normally
+// but do not independently cap the overall Website Score.
+export const CRITICAL_FAILURE_RULE_IDS = [
+  "TECH-001", // Domain Resolves
+  "TECH-002", // Homepage Responds
+  "TECH-006", // HTTPS Available
+  "TECH-008", // TLS Certificate Valid
+  "TECH-012", // Redirect Loop
+  "TECH-017", // Website Not Globally Blocked
+  "TECH-032", // Server Errors
+] as const;
+
+export const CRITICAL_FAILURE_RULE_ID_SET: ReadonlySet<string> = new Set(
+  CRITICAL_FAILURE_RULE_IDS,
+);
+
 function buildRuleConfigs(
   prefix: string,
   category: ScoringCategory,
@@ -126,6 +143,20 @@ export function validateScoringConfiguration(): void {
     if (!Number.isFinite(rule.maxPoints) || rule.maxPoints <= 0) {
       throw new Error(`${rule.ruleId} has an invalid maximum point value.`);
     }
+  }
+
+  for (const criticalRuleId of CRITICAL_FAILURE_RULE_IDS) {
+    const criticalRule = SCORING_RULE_BY_ID.get(criticalRuleId);
+    if (!criticalRule) {
+      throw new Error(`Critical failure rule ${criticalRuleId} is missing from scoring configuration.`);
+    }
+    if (criticalRule.category !== "TECHNICAL_HEALTH") {
+      throw new Error(`Critical failure rule ${criticalRuleId} must belong to Technical Health.`);
+    }
+  }
+
+  if (new Set(CRITICAL_FAILURE_RULE_IDS).size !== CRITICAL_FAILURE_RULE_IDS.length) {
+    throw new Error("Critical failure configuration contains duplicate rule IDs.");
   }
 
   for (const [category, expectedCount] of Object.entries(EXPECTED_RULE_COUNTS) as Array<
