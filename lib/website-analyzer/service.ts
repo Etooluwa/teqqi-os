@@ -6,6 +6,8 @@ import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
 import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { collectLinkIntegrityEvidence } from "@/lib/website-analyzer/link-integrity";
 import { collectMobileUsabilityEvidence } from "@/lib/website-analyzer/mobile-usability";
+import { collectPerformanceEvidence } from "@/lib/website-analyzer/performance/pagespeed";
+import { runPerformanceRules } from "@/lib/website-analyzer/performance/rules";
 import { runSeoBatch1 } from "@/lib/website-analyzer/seo/batch1";
 import { runSeoBatch2 } from "@/lib/website-analyzer/seo/batch2";
 import { runSeoBatch3 } from "@/lib/website-analyzer/seo/batch3";
@@ -58,6 +60,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const linkIntegrity = await collectLinkIntegrityEvidence({ finalUrl: fetchResult.finalUrl, homepageFacts: pageFacts, crawlability });
   const technicalHygiene = await collectTechnicalHygieneEvidence({ fetchResult, pageFacts, crawlability });
   const seoEvidence = await collectSeoEvidence({ homepageFetch: fetchResult, homepageFacts: pageFacts, crawlability });
+  const performanceEvidence = await collectPerformanceEvidence(fetchResult.finalUrl);
 
   const batch1Findings = runTechnicalHealthBatch1({ target, fetchResult, pageFacts });
   const batch2Findings = runTechnicalHealthBatch2({ transport: transportSecurity, pageFacts, finalUrl: fetchResult.finalUrl });
@@ -70,6 +73,7 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const seoBatch2Findings = runSeoBatch2(seoEvidence);
   const seoBatch3Findings = runSeoBatch3({ evidence: seoEvidence, crawlability });
   const remainingSeoFindings = runRemainingSeoRules({ evidence: seoEvidence, crawlability });
+  const performanceFindings = runPerformanceRules(performanceEvidence);
 
   const fetchMetadata = { requestedUrl: fetchResult.requestedUrl, finalUrl: fetchResult.finalUrl, status: fetchResult.status, contentType: fetchResult.contentType, redirectCount: fetchResult.redirectCount, redirects: fetchResult.redirects, byteLength: fetchResult.byteLength, fetchedAt: fetchResult.fetchedAt };
   return {
@@ -86,9 +90,11 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     mobileUsability,
     technicalHygiene,
     seoEvidence,
+    performanceEvidence,
     technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings, ...batch6Findings, ...batch7Findings],
     seoFindings: [...seoBatch1Findings, ...seoBatch2Findings, ...seoBatch3Findings, ...remainingSeoFindings],
-    implementationStage: "SEO_COMPLETE",
-    nextStage: "PERFORMANCE",
+    performanceFindings,
+    implementationStage: "PERFORMANCE_COMPLETE",
+    nextStage: "CONVERSION_UX",
   };
 }
