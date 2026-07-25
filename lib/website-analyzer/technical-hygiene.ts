@@ -19,6 +19,18 @@ const USER_AGENT = "TEQQI-OS-Website-Analyzer/1.0 (+https://theteqqi.com)";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const NOT_FOUND_PATH = "/__teqqi_os_definitely_missing_404_probe__";
 
+type ProbeWithBody = TechnicalResourceProbe & { bodySample: string };
+
+function withoutBodySample(probe: ProbeWithBody): TechnicalResourceProbe {
+  return {
+    url: probe.url,
+    reachable: probe.reachable,
+    statusCode: probe.statusCode,
+    finalUrl: probe.finalUrl,
+    error: probe.error,
+  };
+}
+
 function hostnameBase(hostname: string): string {
   return hostname.toLowerCase().replace(/^www\./, "");
 }
@@ -61,7 +73,7 @@ async function readBodySample(response: Response): Promise<string> {
   return new TextDecoder("utf-8", { fatal: false }).decode(merged);
 }
 
-async function safeProbe(rawUrl: string, captureBody = false): Promise<TechnicalResourceProbe & { bodySample: string }> {
+async function safeProbe(rawUrl: string, captureBody = false): Promise<ProbeWithBody> {
   try {
     let target = await validateWebsiteUrl(rawUrl);
     for (let attempt = 0; attempt <= MAX_REDIRECTS; attempt += 1) {
@@ -143,7 +155,7 @@ function declaredCharset(fetchResult: HtmlFetchResult): TechnicalHygieneEvidence
 function declaredFaviconUrls(html: string, finalUrl: string): string[] {
   const $ = load(html);
   const urls = new Set<string>();
-  $('link[rel][href]').each((_, element) => {
+  $("link[rel][href]").each((_, element) => {
     const rel = ($(element).attr("rel") ?? "").toLowerCase().split(/\s+/);
     if (!rel.some((token) => token === "icon" || token === "shortcut" || token === "apple-touch-icon")) return;
     const href = $(element).attr("href");
@@ -212,7 +224,7 @@ export async function collectTechnicalHygieneEvidence(input: {
     homepageServerError: input.fetchResult.status >= 500,
     crawledServerErrorUrls: crawlStatuses.filter((page) => (page.statusCode ?? 0) >= 500).map((page) => page.url),
     crawledClientErrorUrls: crawlStatuses.filter((page) => (page.statusCode ?? 0) >= 400 && (page.statusCode ?? 0) < 500).map((page) => page.url),
-    favicon: { declaredUrls: declaredIcons, conventionalUrl, probes: faviconProbes.map(({ bodySample: _bodySample, ...probe }) => probe) },
+    favicon: { declaredUrls: declaredIcons, conventionalUrl, probes: faviconProbes.map(withoutBodySample) },
     document: declaredCharset(input.fetchResult),
     javascriptRuntime: {
       inspected: false,
@@ -224,7 +236,7 @@ export async function collectTechnicalHygieneEvidence(input: {
       probedCount: resourceProbes.length,
       failedCount: failedResources,
       unknownCount: unknownResources,
-      probes: resourceProbes.map(({ bodySample: _bodySample, ...probe }) => probe),
+      probes: resourceProbes.map(withoutBodySample),
       probeLimit: FIRST_PARTY_RESOURCE_LIMIT,
       truncated: firstPartyUrls.length > FIRST_PARTY_RESOURCE_LIMIT,
     },
