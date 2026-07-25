@@ -7,6 +7,7 @@ import { extractPageFacts } from "@/lib/website-analyzer/html";
 import { collectLinkIntegrityEvidence } from "@/lib/website-analyzer/link-integrity";
 import { collectMobileUsabilityEvidence } from "@/lib/website-analyzer/mobile-usability";
 import { runSeoBatch1 } from "@/lib/website-analyzer/seo/batch1";
+import { runSeoBatch2 } from "@/lib/website-analyzer/seo/batch2";
 import { collectSeoEvidence } from "@/lib/website-analyzer/seo/evidence";
 import { collectTechnicalHygieneEvidence } from "@/lib/website-analyzer/technical-hygiene";
 import { runTechnicalHealthBatch1 } from "@/lib/website-analyzer/technical-health/batch1";
@@ -63,7 +64,8 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const batch5Findings = runTechnicalHealthBatch5({ evidence: linkIntegrity, homepageFacts: pageFacts });
   const batch6Findings = runTechnicalHealthBatch6({ evidence: mobileUsability, pageFacts });
   const batch7Findings = runTechnicalHealthBatch7({ evidence: technicalHygiene, pageFacts });
-  const seoFindings = runSeoBatch1(seoEvidence);
+  const seoBatch1Findings = runSeoBatch1(seoEvidence);
+  const seoBatch2Findings = runSeoBatch2(seoEvidence);
 
   const fetchMetadata = { requestedUrl: fetchResult.requestedUrl, finalUrl: fetchResult.finalUrl, status: fetchResult.status, contentType: fetchResult.contentType, redirectCount: fetchResult.redirectCount, redirects: fetchResult.redirects, byteLength: fetchResult.byteLength, fetchedAt: fetchResult.fetchedAt };
   return {
@@ -81,8 +83,8 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
     technicalHygiene,
     seoEvidence,
     technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings, ...batch6Findings, ...batch7Findings],
-    seoFindings,
-    implementationStage: "SEO_BATCH_1",
-    nextStage: "SEO_BATCH_2",
+    seoFindings: [...seoBatch1Findings, ...seoBatch2Findings],
+    implementationStage: "SEO_BATCH_2",
+    nextStage: "SEO_BATCH_3",
   };
 }
