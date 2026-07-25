@@ -91,7 +91,7 @@ export type TechnicalHealthRuleId =
   | "TECH-015" | "TECH-016" | "TECH-017" | "TECH-018" | "TECH-019" | "TECH-020" | "TECH-021"
   | "TECH-022" | "TECH-023" | "TECH-024" | "TECH-025" | "TECH-026" | "TECH-027" | "TECH-028" | "TECH-029"
   | "TECH-030" | "TECH-031" | "TECH-032" | "TECH-033" | "TECH-034" | "TECH-035" | "TECH-036" | "TECH-037" | "TECH-038" | `TECH-${string}`;
-export type SeoRuleId = "SEO-001" | "SEO-002" | "SEO-003" | "SEO-004" | "SEO-005" | "SEO-006" | `SEO-${string}`;
+export type SeoRuleId = "SEO-001" | "SEO-002" | "SEO-003" | "SEO-004" | "SEO-005" | "SEO-006" | "SEO-007" | "SEO-008" | "SEO-009" | `SEO-${string}`;
 
 export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | SeoRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
 export type AnalyzerAuditEnvelope = { analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; requestedUrl: string; normalizedUrl: string; createdAt: string };
@@ -102,6 +102,6 @@ export type AnalyzerFetchParseResponse = {
   fetch: Omit<HtmlFetchResult, "html">; pageFacts: PageFacts | null; transportSecurity: TransportSecurityEvidence;
   redirectConsistency: RedirectConsistencyEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobileUsability: MobileUsabilityEvidence | null; technicalHygiene: TechnicalHygieneEvidence;
   seoEvidence: SeoEvidence; technicalHealthFindings: AnalyzerFinding[]; seoFindings: AnalyzerFinding[];
-  implementationStage: "SEO_BATCH_1"; nextStage: "SEO_BATCH_2";
+  implementationStage: "SEO_BATCH_2"; nextStage: "SEO_BATCH_3";
 };
 export type AnalyzerErrorResponse = { ok: false; error: { code: AnalyzerFailureCode; message: string } };
