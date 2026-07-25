@@ -94,3 +94,21 @@ export type CriticalCapResult = {
   applicableCriticalCap: number | null;
   capApplied: boolean;
 };
+
+export type UnifiedWebsiteScoringResult = {
+  scoringModelVersion: string;
+  websiteScore: number | null;
+  scoreAvailable: boolean;
+  uncappedWebsiteScore: number | null;
+  appliedCriticalCap: number | null;
+  capApplied: boolean;
+  criticalFailureCount: number;
+  criticalFailures: CriticalFailureTrigger[];
+  categoryScores: CategoryScoreResult[];
+  weightedCategories: WeightedCategoryContribution[];
+  unavailableCategories: ScoringCategory[];
+  measuredWeight: number;
+  missingWeight: number;
+  measuredWeightedTotal: number;
+  ruleScores: RuleScoreResult[];
+};
