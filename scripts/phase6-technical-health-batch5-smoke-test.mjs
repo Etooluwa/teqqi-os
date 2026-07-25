@@ -6,7 +6,7 @@ async function run() {
   console.log("\nTEQQI OS Phase 6 — Technical Health Batch 5 smoke test"); console.log(`Target: ${baseUrl}\n`);
   const { response, data } = await analyze("https://www.google.com/");
   assert(response.ok, `Google analysis failed: HTTP ${response.status} ${JSON.stringify(data)}`);
-  assert(data.implementationStage === "TECHNICAL_HEALTH_BATCH_5", "Expected Batch 5 stage.");
+  assert(/^TECHNICAL_HEALTH_BATCH_[5-9]$/.test(data.implementationStage), "Expected analyzer to have reached Batch 5 or later.");
   assert(Array.isArray(data.technicalHealthFindings) && data.technicalHealthFindings.length >= 24, "Expected findings through TECH-024.");
   assert(typeof data.linkIntegrity === "object", "Expected link-integrity evidence.");
   assert(Array.isArray(data.linkIntegrity.internalLinks), "Expected normalized internal links.");
