@@ -1,5 +1,6 @@
 import "server-only";
 
+import { runConversionUxRules } from "@/lib/website-analyzer/conversion-ux/rules";
 import { collectCrawlabilityEvidence } from "@/lib/website-analyzer/crawlability";
 import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { fetchWebsiteHtml } from "@/lib/website-analyzer/fetch";
@@ -74,27 +75,15 @@ export async function prepareWebsiteAnalysis(rawUrl: string): Promise<AnalyzerFe
   const seoBatch3Findings = runSeoBatch3({ evidence: seoEvidence, crawlability });
   const remainingSeoFindings = runRemainingSeoRules({ evidence: seoEvidence, crawlability });
   const performanceFindings = runPerformanceRules(performanceEvidence);
+  const conversionUxFindings = runConversionUxRules({ seo: seoEvidence, crawlability, linkIntegrity, mobile: mobileUsability });
 
   const fetchMetadata = { requestedUrl: fetchResult.requestedUrl, finalUrl: fetchResult.finalUrl, status: fetchResult.status, contentType: fetchResult.contentType, redirectCount: fetchResult.redirectCount, redirects: fetchResult.redirects, byteLength: fetchResult.byteLength, fetchedAt: fetchResult.fetchedAt };
   return {
-    ok: true,
-    analyzerVersion: WEBSITE_ANALYZER_VERSION,
-    status: "RUNNING",
-    target,
-    fetch: fetchMetadata,
-    pageFacts,
-    transportSecurity,
-    redirectConsistency,
-    crawlability,
-    linkIntegrity,
-    mobileUsability,
-    technicalHygiene,
-    seoEvidence,
-    performanceEvidence,
+    ok: true, analyzerVersion: WEBSITE_ANALYZER_VERSION, status: "RUNNING", target, fetch: fetchMetadata, pageFacts,
+    transportSecurity, redirectConsistency, crawlability, linkIntegrity, mobileUsability, technicalHygiene, seoEvidence, performanceEvidence,
     technicalHealthFindings: [...batch1Findings, ...batch2Findings, ...batch3Findings, ...batch4Findings, ...batch5Findings, ...batch6Findings, ...batch7Findings],
     seoFindings: [...seoBatch1Findings, ...seoBatch2Findings, ...seoBatch3Findings, ...remainingSeoFindings],
-    performanceFindings,
-    implementationStage: "PERFORMANCE_COMPLETE",
-    nextStage: "CONVERSION_UX",
+    performanceFindings, conversionUxFindings,
+    implementationStage: "CONVERSION_UX_COMPLETE", nextStage: "ACCESSIBILITY",
   };
 }
