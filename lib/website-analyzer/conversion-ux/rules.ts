@@ -16,7 +16,6 @@ function na(ruleId: string, summary: string): AnalyzerFinding { return f(ruleId,
 function unknown(ruleId: string, summary: string, evidence: Record<string, unknown> = {}): AnalyzerFinding { return f(ruleId, "UNKNOWN", summary, {}, evidence, "LOW", true); }
 function homepage(e: SeoEvidence): SeoPageEvidence | null { return e.pages.find((p) => p.isHomepage) ?? e.pages[0] ?? null; }
 function text(p: SeoPageEvidence) { return [p.facts.title, ...p.facts.h1Texts, ...p.facts.h2Texts, p.facts.bodyTextSample].filter(Boolean).join(" "); }
-function linkText(p: SeoPageEvidence) { return p.facts.links.map((l) => l.accessibleName || l.text).filter(Boolean); }
 function ctas(p: SeoPageEvidence) {
   const links = p.facts.links.map((l) => ({ kind: "link", text: l.accessibleName || l.text, href: l.href })).filter((x) => CTA.test(x.text));
   const buttons = p.facts.buttons.map((b) => ({ kind: "button", text: b.accessibleName || b.text, href: null })).filter((x) => CTA.test(x.text));
@@ -32,7 +31,7 @@ function sameSiteHref(base: string, href: string | null) { if (!href) return nul
 function statusFromCounts(good: number, weak: number, failSummary: string, passSummary: string, warnSummary: string, ruleId: string, result: Record<string, unknown>, evidence: Record<string, unknown> = {}) { return good > 0 ? f(ruleId, "PASS", passSummary, result, evidence) : weak > 0 ? f(ruleId, "WARNING", warnSummary, result, evidence, "MEDIUM") : f(ruleId, "FAIL", failSummary, result, evidence); }
 
 export function runConversionUxRules(input: { seo: SeoEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobile: MobileUsabilityEvidence | null }): AnalyzerFinding[] {
-  const { seo, crawlability, linkIntegrity, mobile } = input;
+  const { seo, linkIntegrity, mobile } = input;
   const home = homepage(seo);
   if (!home) return Array.from({ length: 22 }, (_, i) => na(`CUX-${String(i + 1).padStart(3, "0")}`, "Conversion/UX inspection is not applicable because no HTML page was available."));
   const body = text(home); const homeCtas = ctas(home); const contacts = contactSignals(home); const nav = navLinks(home);
