@@ -46,15 +46,19 @@ export function scoreFinding(finding: ScorableFinding): RuleScoreResult {
     );
   }
 
-  const isNotApplicable = finding.status === "NOT_APPLICABLE";
-  if (isNotApplicable !== !finding.applicable) {
+  if (finding.status === "NOT_APPLICABLE") {
+    if (finding.applicable) {
+      throw new WebsiteScoringError(
+        `${finding.ruleId} has inconsistent applicable/status values.`,
+      );
+    }
+    return excludedResult(finding, config.maxPoints, "NOT_APPLICABLE");
+  }
+
+  if (!finding.applicable) {
     throw new WebsiteScoringError(
       `${finding.ruleId} has inconsistent applicable/status values.`,
     );
-  }
-
-  if (isNotApplicable) {
-    return excludedResult(finding, config.maxPoints, "NOT_APPLICABLE");
   }
 
   if (finding.status === "UNKNOWN") {
