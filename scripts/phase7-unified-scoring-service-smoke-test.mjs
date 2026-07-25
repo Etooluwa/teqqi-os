@@ -33,6 +33,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function approximatelyEqual(left, right, epsilon = 1e-12) {
+  return Math.abs(left - right) <= epsilon;
+}
+
 function finding(rule, status = "PASS", confidence = "HIGH") {
   return {
     ruleId: rule.ruleId,
@@ -112,8 +116,14 @@ assert(missingRejected, "Missing category input should be rejected.");
 console.log("✓ Missing category input is rejected rather than silently scored");
 
 assert(perfect.scoringModelVersion === config.SCORING_MODEL_VERSION, "Unified result must expose scoring model version.");
-assert(perfect.measuredWeight === 1 && perfect.missingWeight === 0, "Perfect fixture should reconcile full category weight.");
-assert(perfect.measuredWeightedTotal === perfect.uncappedWebsiteScore, "Weighted total should reconcile with uncapped score.");
+assert(
+  approximatelyEqual(perfect.measuredWeight, 1) && approximatelyEqual(perfect.missingWeight, 0),
+  `Perfect fixture should reconcile full category weight; measured=${perfect.measuredWeight}, missing=${perfect.missingWeight}.`,
+);
+assert(
+  approximatelyEqual(perfect.measuredWeightedTotal, perfect.uncappedWebsiteScore),
+  "Weighted total should reconcile with uncapped score.",
+);
 console.log("✓ Unified explanation reconciles model version, category weights, uncapped score, cap, and final score");
 
 console.log("\nPhase 7 unified scoring service smoke test passed.\n");
