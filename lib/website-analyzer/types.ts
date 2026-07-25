@@ -58,11 +58,24 @@ export type MobileUsabilityEvidence = {
   limitations: string[];
 };
 
+export type TechnicalResourceProbe = { url: string; reachable: boolean | null; statusCode: number | null; finalUrl: string | null; error: string | null };
+export type TechnicalHygieneEvidence = {
+  notFoundProbe: { requestedUrl: string; statusCode: number | null; finalUrl: string | null; bodySample: string; appearsNotFound: boolean | null; error: string | null };
+  homepageServerError: boolean;
+  crawledServerErrorUrls: string[];
+  crawledClientErrorUrls: string[];
+  favicon: { declaredUrls: string[]; conventionalUrl: string; probes: TechnicalResourceProbe[] };
+  document: { doctypePresent: boolean; declaredCharset: string | null; charsetSource: "HTTP_HEADER" | "META_CHARSET" | "META_HTTP_EQUIV" | null };
+  javascriptRuntime: { inspected: false; errorCount: null; limitation: string };
+  firstPartyResources: { totalReferences: number; probedCount: number; failedCount: number; unknownCount: number; probes: TechnicalResourceProbe[]; probeLimit: number; truncated: boolean };
+};
+
 export type TechnicalHealthRuleId =
   | "TECH-001" | "TECH-002" | "TECH-003" | "TECH-004" | "TECH-005" | "TECH-006" | "TECH-007"
   | "TECH-008" | "TECH-009" | "TECH-010" | "TECH-011" | "TECH-012" | "TECH-013" | "TECH-014"
   | "TECH-015" | "TECH-016" | "TECH-017" | "TECH-018" | "TECH-019" | "TECH-020" | "TECH-021"
-  | "TECH-022" | "TECH-023" | "TECH-024" | "TECH-025" | "TECH-026" | "TECH-027" | "TECH-028" | "TECH-029" | `TECH-${string}`;
+  | "TECH-022" | "TECH-023" | "TECH-024" | "TECH-025" | "TECH-026" | "TECH-027" | "TECH-028" | "TECH-029"
+  | "TECH-030" | "TECH-031" | "TECH-032" | "TECH-033" | "TECH-034" | "TECH-035" | "TECH-036" | "TECH-037" | "TECH-038" | `TECH-${string}`;
 
 export type AnalyzerFinding = { ruleId: TechnicalHealthRuleId | string; category: AnalyzerCategory; status: RuleStatus; confidence: ConfidenceLevel; applicable: boolean; summary: string; result: Record<string, unknown>; evidence: Record<string, unknown>; detectorVersion: string };
 export type AnalyzerAuditEnvelope = { analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: AuditStatus; requestedUrl: string; normalizedUrl: string; createdAt: string };
@@ -71,7 +84,7 @@ export type AnalyzerFoundationResponse = { ok: true; analyzerVersion: typeof WEB
 export type AnalyzerFetchParseResponse = {
   ok: true; analyzerVersion: typeof WEBSITE_ANALYZER_VERSION; status: "RUNNING"; target: ValidatedWebsiteTarget;
   fetch: Omit<HtmlFetchResult, "html">; pageFacts: PageFacts | null; transportSecurity: TransportSecurityEvidence;
-  redirectConsistency: RedirectConsistencyEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobileUsability: MobileUsabilityEvidence | null;
-  technicalHealthFindings: AnalyzerFinding[]; implementationStage: "TECHNICAL_HEALTH_BATCH_6"; nextStage: "TECHNICAL_HEALTH_BATCH_7";
+  redirectConsistency: RedirectConsistencyEvidence; crawlability: CrawlabilityEvidence; linkIntegrity: LinkIntegrityEvidence; mobileUsability: MobileUsabilityEvidence | null; technicalHygiene: TechnicalHygieneEvidence;
+  technicalHealthFindings: AnalyzerFinding[]; implementationStage: "TECHNICAL_HEALTH_BATCH_7"; nextStage: "TECHNICAL_HEALTH_COMPLETE";
 };
 export type AnalyzerErrorResponse = { ok: false; error: { code: AnalyzerFailureCode; message: string } };
