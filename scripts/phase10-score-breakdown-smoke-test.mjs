@@ -15,7 +15,8 @@ assert(candidate?.externalId, "A discovered business is required for the Phase 1
 const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
 const body = await response.json();
 assert(response.ok && body.ok === true, `Business detail API failed: ${JSON.stringify(body)}`);
-const detail = body.businessDetail;
+const detail = body.detail;
+assert(detail, "Business detail API must return detail.");
 const breakdown = detail.intelligence.scoreBreakdown;
 
 assert(breakdown && typeof breakdown.available === "boolean", "Business detail must expose an explicit scoreBreakdown contract.");
