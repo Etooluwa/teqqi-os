@@ -2,8 +2,10 @@ import "server-only";
 
 import { getGooglePlaceDetails } from "@/lib/business-discovery/google-places";
 import { supabaseRest } from "@/lib/supabase/server";
+import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
 import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
 import type { UnifiedWebsiteScoringResult } from "@/lib/website-scoring/types";
+import { buildBusinessDetailAnalyzerFindings } from "./analyzer-findings";
 import { buildBusinessDetailScoreBreakdown } from "./score-breakdown";
 import type { BusinessDetailSnapshot } from "./types";
 
@@ -17,6 +19,7 @@ type ScoringRunRow = {
   requested_url: string;
   final_url: string;
   analyzer_version: string;
+  analyzer_findings: AnalyzerFinding[] | null;
   scoring_model_version: string;
   website_score: string | number | null;
   score_available: boolean;
@@ -80,7 +83,7 @@ async function loadDiscoveryContext(externalId: string) {
 
 async function loadLatestScoringRun(domain: string): Promise<ScoringRunRow | null> {
   const rows = await supabaseRest<ScoringRunRow[]>(
-    "/website_scoring_runs?status=eq.COMPLETED&select=id,website_id,requested_url,final_url,analyzer_version,scoring_model_version,website_score,score_available,explanation,created_at&order=created_at.desc&limit=1000",
+    "/website_scoring_runs?status=eq.COMPLETED&select=id,website_id,requested_url,final_url,analyzer_version,analyzer_findings,scoring_model_version,website_score,score_available,explanation,created_at&order=created_at.desc&limit=1000",
   );
   return rows.find((row) => canonicalDomain(row.final_url) === domain) ?? null;
 }
@@ -121,6 +124,7 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
     websiteScore: numeric(scoringRow.website_score),
     scoreAvailable: scoringRow.score_available,
     createdAt: scoringRow.created_at,
+    analyzerFindings: scoringRow.analyzer_findings,
     scoring: scoringRow.explanation,
   } : null;
 
@@ -138,6 +142,12 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
   } : null;
 
   const scoreBreakdown = buildBusinessDetailScoreBreakdown(scoringRun?.scoring ?? null);
+  const analyzerFindings = buildBusinessDetailAnalyzerFindings({
+    analyzerVersion: scoringRun?.analyzerVersion ?? null,
+    findings: scoringRun?.analyzerFindings ?? null,
+    ruleScores: scoringRun?.scoring.ruleScores ?? null,
+    hasScoringRun: Boolean(scoringRun),
+  });
 
   return {
     detailVersion: DETAIL_VERSION,
@@ -149,6 +159,7 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
       websiteUrl: business.websiteUrl,
       scoringRun,
       scoreBreakdown,
+      analyzerFindings,
       opportunityRun,
     },
     leadScore: { available: false, score: null, tier: null, reason: "BUSINESS_LEVEL_LEAD_MODEL_NOT_IMPLEMENTED" },
