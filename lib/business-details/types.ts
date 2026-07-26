@@ -1,7 +1,14 @@
 import type { ProviderBusinessResult } from "@/lib/business-discovery/types";
+import type {
+  AnalyzerCategory,
+  AnalyzerFinding,
+  ConfidenceLevel,
+  RuleStatus,
+} from "@/lib/website-analyzer/types";
 import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
 import type {
   CriticalFailureTrigger,
+  RuleScoreExclusionReason,
   RuleScoreResult,
   ScoringCategory,
   UnifiedWebsiteScoringResult,
@@ -32,6 +39,7 @@ export type BusinessDetailScoringRun = {
   websiteScore: number | null;
   scoreAvailable: boolean;
   createdAt: string;
+  analyzerFindings: AnalyzerFinding[] | null;
   scoring: UnifiedWebsiteScoringResult;
 } | null;
 
@@ -70,6 +78,44 @@ export type BusinessDetailScoreBreakdown = {
   excludedRuleCount: number;
 };
 
+export type BusinessDetailFinding = {
+  ruleId: string;
+  category: AnalyzerCategory;
+  status: RuleStatus;
+  confidence: ConfidenceLevel;
+  applicable: boolean;
+  summary: string;
+  result: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  detectorVersion: string;
+  scoring: {
+    matched: boolean;
+    included: boolean;
+    exclusionReason: RuleScoreExclusionReason | null;
+    earnedPoints: number | null;
+    maxPoints: number | null;
+  };
+};
+
+export type BusinessDetailFindingGroup = {
+  category: AnalyzerCategory;
+  findingCount: number;
+  passCount: number;
+  warningCount: number;
+  failCount: number;
+  unknownCount: number;
+  notApplicableCount: number;
+  findings: BusinessDetailFinding[];
+};
+
+export type BusinessDetailAnalyzerFindings = {
+  available: boolean;
+  unavailableReason: "NO_COMPLETED_SCORING_RUN" | "LEGACY_SCORING_RUN_WITHOUT_ANALYZER_FINDINGS" | null;
+  analyzerVersion: string | null;
+  findingCount: number;
+  groups: BusinessDetailFindingGroup[];
+};
+
 export type BusinessDetailOpportunityRun = {
   opportunityRunId: string;
   scoringRunId: string;
@@ -93,6 +139,7 @@ export type BusinessDetailSnapshot = {
     websiteUrl: string | null;
     scoringRun: BusinessDetailScoringRun;
     scoreBreakdown: BusinessDetailScoreBreakdown;
+    analyzerFindings: BusinessDetailAnalyzerFindings;
     opportunityRun: BusinessDetailOpportunityRun;
   };
   leadScore: BusinessDetailLeadScore;
