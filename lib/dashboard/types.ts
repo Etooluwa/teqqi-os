@@ -76,6 +76,11 @@ export type DashboardSearchSummary = {
   createdAt: string;
 };
 
+export type DashboardHistoryEntry = DashboardSearchSummary & {
+  selected: boolean;
+  dashboardPath: string;
+};
+
 export type OpportunityDashboardSnapshot = {
   dashboardVersion: "1.0.0";
   market: DashboardSearchSummary;
@@ -83,6 +88,7 @@ export type OpportunityDashboardSnapshot = {
   businesses: DashboardBusinessRow[];
   rankedBusinesses: DashboardRankedBusinessRow[];
   searchHistory: DashboardSearchSummary[];
+  historyNavigation: DashboardHistoryEntry[];
   dataNotes: {
     googlePlaceContentPersisted: false;
     googlePlaceDetailsRetrievedLive: true;
