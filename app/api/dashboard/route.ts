@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
   try {
     const tableInput = parseDashboardTableView(searchParams);
-    const dashboard = await buildOpportunityDashboardSnapshot(searchId);
+    const dashboard = await buildOpportunityDashboardSnapshot(searchId, searchParams);
     const tableView = buildDashboardTableView(dashboard.rankedBusinesses, tableInput);
     return NextResponse.json({ ok: true, dashboard: { ...dashboard, tableView } });
   } catch (error) {
