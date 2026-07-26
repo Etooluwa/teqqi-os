@@ -81,7 +81,7 @@ export function buildBusinessDetailScoreBreakdown(
       criticalFailureCount: 0,
       criticalFailures: [],
       measuredWeight: 0,
-      missingWeight: 100,
+      missingWeight: 1,
       measuredWeightedTotal: 0,
       unavailableCategories: [...CATEGORY_ORDER],
       categories: [],
@@ -109,9 +109,19 @@ export function buildBusinessDetailScoreBreakdown(
     throw new Error("Included and excluded rule counts do not reconcile.");
   }
 
-  const measuredWeight = round(categories.filter((category) => category.available).reduce((sum, category) => sum + category.weight, 0));
-  const missingWeight = round(100 - measuredWeight);
-  if (Math.abs(measuredWeight - round(scoring.measuredWeight)) > 0.01 || Math.abs(missingWeight - round(scoring.missingWeight)) > 0.01) {
+  // Category weights are stored as fractions (for example 0.25 = 25%),
+  // matching the Phase 7 scoring engine. Therefore measured + missing = 1.0.
+  const measuredWeight = round(
+    categories
+      .filter((category) => category.available)
+      .reduce((sum, category) => sum + category.weight, 0),
+  );
+  const missingWeight = round(1 - measuredWeight);
+
+  if (
+    Math.abs(measuredWeight - round(scoring.measuredWeight)) > 0.01 ||
+    Math.abs(missingWeight - round(scoring.missingWeight)) > 0.01
+  ) {
     throw new Error("Measured and missing category weights do not reconcile.");
   }
 
