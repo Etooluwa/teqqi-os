@@ -52,6 +52,11 @@ async function loadLatestScoringRun(domain: string): Promise<ScoringRunRow | nul
   const rows = await supabaseRest<ScoringRunRow[]>("/website_scoring_runs?status=eq.COMPLETED&select=id,website_id,requested_url,final_url,analyzer_version,analyzer_findings,scoring_model_version,website_score,score_available,explanation,created_at&order=created_at.desc&limit=1000");
   return rows.find((row) => canonicalDomain(row.final_url) === domain) ?? null;
 }
+async function loadScoringRunById(scoringRunId: string): Promise<ScoringRunRow | null> {
+  const encoded = encodeURIComponent(scoringRunId);
+  const rows = await supabaseRest<ScoringRunRow[]>(`/website_scoring_runs?id=eq.${encoded}&status=eq.COMPLETED&select=id,website_id,requested_url,final_url,analyzer_version,analyzer_findings,scoring_model_version,website_score,score_available,explanation,created_at&limit=1`);
+  return rows[0] ?? null;
+}
 async function loadLatestOpportunityRun(domain: string): Promise<OpportunityRunRow | null> {
   const rows = await supabaseRest<OpportunityRunRow[]>("/website_opportunity_runs?status=eq.COMPLETED&select=id,scoring_run_id,website_id,requested_url,final_url,analyzer_version,scoring_model_version,opportunity_engine_version,result,created_at&order=created_at.desc&limit=1000");
   return rows.find((row) => canonicalDomain(row.final_url) === domain) ?? null;
@@ -65,8 +70,15 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
   let business;
   try { business = await getGooglePlaceDetails(placeId, discovery.resultPosition); }
   catch (error) { throw new BusinessDetailError(error instanceof Error ? `Live business details could not be loaded: ${error.message}` : "Live business details could not be loaded."); }
+
   const domain = canonicalDomain(business.websiteUrl);
-  const [scoringRow, opportunityRow] = domain ? await Promise.all([loadLatestScoringRun(domain), loadLatestOpportunityRun(domain)]) : [null, null];
+  const opportunityRow = domain ? await loadLatestOpportunityRun(domain) : null;
+  // A recommendation must always be explained using the exact scoring/analyzer run that produced it.
+  // When no opportunity run exists, fall back to the latest completed scoring run for score-only detail.
+  const scoringRow = opportunityRow
+    ? await loadScoringRunById(opportunityRow.scoring_run_id)
+    : domain ? await loadLatestScoringRun(domain) : null;
+
   const scoringRun = scoringRow ? {
     scoringRunId: scoringRow.id, websiteId: scoringRow.website_id, requestedUrl: scoringRow.requested_url, finalUrl: scoringRow.final_url,
     analyzerVersion: scoringRow.analyzer_version, scoringModelVersion: scoringRow.scoring_model_version, websiteScore: numeric(scoringRow.website_score),
