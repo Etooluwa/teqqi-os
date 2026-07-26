@@ -17,17 +17,23 @@ const recommendations = detail.intelligence.recommendations;
 assert(recommendations && typeof recommendations.available === "boolean", "Recommendations contract must be explicit.");
 
 if (recommendations.available) {
+  assert(detail.intelligence.opportunityRun, "Available recommendations require an opportunity run.");
+  assert(detail.intelligence.scoringRun, "Available recommendations require their scoring run.");
+  assert(detail.intelligence.opportunityRun.scoringRunId === detail.intelligence.scoringRun.scoringRunId, "Recommendations must use the exact scoring run that produced the opportunity run.");
   assert(recommendations.opportunityCount === recommendations.recommendations.length, "Opportunity count must reconcile.");
   for (const item of recommendations.recommendations) {
     assert(item.opportunityId && item.title && item.recommendedService, "Recommendation identity and service are required.");
     assert(["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(item.priority), "Priority must use the approved scale.");
     assert(["HIGH", "MEDIUM", "LOW"].includes(item.confidence), "Confidence must use the approved scale.");
+    assert(typeof item.recommendation === "string" && item.recommendation.length > 0, "Recommendation text must remain explicit.");
+    assert(typeof item.explanation === "string" && item.explanation.length > 0, "Recommendation explanation must remain explicit.");
     assert(Array.isArray(item.priorityReasons) && Array.isArray(item.confidenceReasons), "Assessment reasons must remain explicit.");
     assert(item.evidenceCount === item.evidence.length, "Evidence count must reconcile.");
     assert(item.evidence.every((e) => item.supportingFindingIds.includes(e.ruleId)), "Evidence must come only from supporting analyzer findings.");
   }
-  console.log("✓ Website opportunities expose approved services, priority, confidence, and assessment reasoning");
+  console.log("✓ Website opportunities expose approved services, priority, confidence, recommendation text, and assessment reasoning");
   console.log("✓ Recommendation evidence remains traceable to the exact supporting Phase 6 analyzer findings");
+  console.log("✓ Opportunity run is tied to the exact Phase 7 scoring/analyzer run that produced it");
   console.log("✓ Opportunity and scoring model versions remain explicit for reproducibility");
 } else {
   assert(recommendations.unavailableReason === "NO_COMPLETED_OPPORTUNITY_RUN", "Unavailable recommendations need an explicit reason.");
