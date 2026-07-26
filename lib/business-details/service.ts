@@ -4,6 +4,7 @@ import { getGooglePlaceDetails } from "@/lib/business-discovery/google-places";
 import { supabaseRest } from "@/lib/supabase/server";
 import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
 import type { UnifiedWebsiteScoringResult } from "@/lib/website-scoring/types";
+import { buildBusinessDetailScoreBreakdown } from "./score-breakdown";
 import type { BusinessDetailSnapshot } from "./types";
 
 const DETAIL_VERSION = "1.0.0" as const;
@@ -136,6 +137,8 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
     result: opportunityRow.result,
   } : null;
 
+  const scoreBreakdown = buildBusinessDetailScoreBreakdown(scoringRun?.scoring ?? null);
+
   return {
     detailVersion: DETAIL_VERSION,
     externalId: placeId,
@@ -145,6 +148,7 @@ export async function buildBusinessDetailSnapshot(externalId: string): Promise<B
       available: Boolean(scoringRun || opportunityRun),
       websiteUrl: business.websiteUrl,
       scoringRun,
+      scoreBreakdown,
       opportunityRun,
     },
     leadScore: { available: false, score: null, tier: null, reason: "BUSINESS_LEVEL_LEAD_MODEL_NOT_IMPLEMENTED" },
