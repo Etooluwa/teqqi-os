@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseRest } from "@/lib/supabase/server";
+import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
 import type {
   CategoryScoreResult,
   UnifiedWebsiteScoringResult,
@@ -11,6 +12,7 @@ type PersistScoringRunInput = {
   requestedUrl: string;
   finalUrl: string;
   analyzerVersion: string;
+  analyzerFindings: AnalyzerFinding[];
   scoring: UnifiedWebsiteScoringResult;
 };
 
@@ -21,6 +23,7 @@ type ScoringRunRow = {
   requested_url: string;
   final_url: string;
   analyzer_version: string;
+  analyzer_findings: AnalyzerFinding[] | null;
   scoring_model_version: string;
   website_score: string | number | null;
   uncapped_website_score: string | number | null;
@@ -101,6 +104,7 @@ export async function persistWebsiteScoringRun(
       requested_url: input.requestedUrl,
       final_url: input.finalUrl,
       analyzer_version: input.analyzerVersion,
+      analyzer_findings: input.analyzerFindings,
       scoring_model_version: input.scoring.scoringModelVersion,
       website_score: input.scoring.websiteScore,
       uncapped_website_score: input.scoring.uncappedWebsiteScore,
