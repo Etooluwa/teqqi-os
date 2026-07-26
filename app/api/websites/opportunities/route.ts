@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       requestedUrl: body.url,
       finalUrl: analysis.fetch.finalUrl,
       analyzerVersion: analysis.analyzerVersion,
+      analyzerFindings: allFindings,
       scoring,
     });
 
