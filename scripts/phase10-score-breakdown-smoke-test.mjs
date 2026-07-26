@@ -35,7 +35,7 @@ if (detail.intelligence.scoringRun) {
     .filter((category) => category.weightedContribution !== null)
     .reduce((sum, category) => sum + category.weightedContribution, 0);
   assert(Math.abs(weightedTotal - breakdown.measuredWeightedTotal) < 0.02, "Weighted category contributions must reconcile with the measured weighted total.");
-  assert(Math.abs((breakdown.measuredWeight + breakdown.missingWeight) - 100) < 0.02, "Measured and missing weights must total 100.");
+  assert(Math.abs((breakdown.measuredWeight + breakdown.missingWeight) - 1) < 0.02, "Measured and missing weights must total 1.0.");
   console.log("✓ Category weights, weighted contributions, and missing-data behavior reconcile");
 
   for (const category of breakdown.categories) {
