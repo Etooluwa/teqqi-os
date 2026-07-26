@@ -44,6 +44,14 @@ export async function POST(request: Request) {
 
   try {
     const analysis = await prepareWebsiteAnalysis(body.url);
+    const allFindings = [
+      ...analysis.technicalHealthFindings,
+      ...analysis.seoFindings,
+      ...analysis.performanceFindings,
+      ...analysis.conversionUxFindings,
+      ...analysis.accessibilityFindings,
+      ...analysis.contentQualityFindings,
+    ];
     const scoringInput: WebsiteScoringInput = {
       TECHNICAL_HEALTH: analysis.technicalHealthFindings.map(toScorableFinding),
       SEO: analysis.seoFindings.map(toScorableFinding),
@@ -58,6 +66,7 @@ export async function POST(request: Request) {
       requestedUrl: body.url,
       finalUrl: analysis.fetch.finalUrl,
       analyzerVersion: analysis.analyzerVersion,
+      analyzerFindings: allFindings,
       scoring,
     });
 
