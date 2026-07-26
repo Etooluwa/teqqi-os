@@ -6,6 +6,7 @@ import { supabaseRest } from "@/lib/supabase/server";
 import type { WebsiteOpportunityEngineResult } from "@/lib/website-opportunities/types";
 import { buildDashboardMarketSummary } from "./market-summary";
 import { rankDashboardBusinesses } from "./ranking";
+import { buildDashboardHistoryEntries } from "./search-history";
 import type { DashboardBestOpportunity, DashboardBusinessRow, DashboardSearchSummary, OpportunityDashboardSnapshot } from "./types";
 
 const DASHBOARD_VERSION = "1.0.0" as const;
@@ -58,7 +59,10 @@ async function loadScoringRuns(): Promise<Map<string, number | null>> {
   return new Map(rows.map((row) => [row.id, numericScore(row.website_score)]));
 }
 
-export async function buildOpportunityDashboardSnapshot(requestedSearchId?: string): Promise<OpportunityDashboardSnapshot> {
+export async function buildOpportunityDashboardSnapshot(
+  requestedSearchId?: string,
+  currentParams: URLSearchParams = new URLSearchParams(),
+): Promise<OpportunityDashboardSnapshot> {
   const searchHistoryRows = await listSearchExecutions(25);
   if (searchHistoryRows.length === 0) throw new DashboardDataError("No business discovery searches are available yet.");
   const selectedSearch = requestedSearchId ? await getSearchExecution(requestedSearchId) : searchHistoryRows[0];
@@ -92,13 +96,15 @@ export async function buildOpportunityDashboardSnapshot(requestedSearchId?: stri
   }));
 
   const orderedBusinesses = businesses.sort((a, b) => a.resultPosition - b.resultPosition);
+  const searchHistory = searchHistoryRows.map(toSearchSummary);
   return {
     dashboardVersion: DASHBOARD_VERSION,
     market: toSearchSummary(selectedSearch),
     summary: buildDashboardMarketSummary(orderedBusinesses, resultByOpportunityRunId),
     businesses: orderedBusinesses,
     rankedBusinesses: rankDashboardBusinesses(orderedBusinesses),
-    searchHistory: searchHistoryRows.map(toSearchSummary),
+    searchHistory,
+    historyNavigation: buildDashboardHistoryEntries(searchHistory, selectedSearch.id, currentParams),
     dataNotes: { googlePlaceContentPersisted: false, googlePlaceDetailsRetrievedLive: true, leadScoreStatus: "UNAVAILABLE_UNTIL_BUSINESS_LEVEL_MODEL_EXISTS" },
   };
 }
