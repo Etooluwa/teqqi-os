@@ -25,8 +25,10 @@ const detail = body.detail;
 const recommendations = detail.intelligence.recommendations;
 
 assert(recommendations.available === true, "Recommendations must be available after a fresh opportunity run.");
-assert(recommendations.opportunityRunId === detail.intelligence.opportunityRun?.opportunityRunId, "Recommendations must identify their opportunity run.");
-assert(recommendations.scoringRunId === detail.intelligence.scoringRun?.scoringRunId, "Recommendations must use the matching scoring run.");
+assert(recommendations.opportunityRunId === runBody.opportunityRunId, "Recommendations must identify the exact fresh opportunity run.");
+assert(recommendations.scoringRunId === runBody.scoringRunId, "Recommendations must identify the exact scoring run used by Phase 8.");
+assert(recommendations.opportunityRunId === detail.intelligence.opportunityRun?.opportunityRunId, "Recommendations must match the business-detail opportunity run.");
+assert(recommendations.scoringRunId === detail.intelligence.scoringRun?.scoringRunId, "Recommendations must use the matching business-detail scoring run.");
 console.log("✓ Recommendations remain tied to the exact immutable scoring/opportunity run chain");
 
 assert(recommendations.opportunityCount === recommendations.recommendations.length, "Recommendation count must reconcile.");
@@ -46,18 +48,28 @@ console.log("✓ Approved service mapping, priority, confidence, action, and rea
 
 assert(recommendations.evidenceAvailable === true, `Fresh recommendation evidence should be complete; reason: ${recommendations.evidenceUnavailableReason}`);
 assert(recommendations.recommendationCountWithCompleteEvidence === recommendations.opportunityCount, "Every recommendation must have complete evidence.");
+const analyzerFindingIds = new Set(detail.intelligence.analyzerFindings.groups.flatMap((group) => group.findings.map((finding) => finding.ruleId)));
 for (const item of recommendations.recommendations) {
   assert(item.evidenceAvailable === true, `${item.opportunityId} must expose complete supporting evidence.`);
   assert(item.evidenceCount === item.expectedEvidenceCount, `${item.opportunityId} evidence totals must reconcile.`);
   assert(item.evidenceCount === item.supportingFindingIds.length, `${item.opportunityId} evidence must match supporting finding IDs.`);
   assert(item.missingEvidenceFindingIds.length === 0, `${item.opportunityId} must not lose supporting finding IDs.`);
   assert(new Set(item.evidence.map((evidence) => evidence.ruleId)).size === item.evidence.length, `${item.opportunityId} evidence must be unique.`);
-  assert(item.evidence.every((evidence) => item.supportingFindingIds.includes(evidence.ruleId)), "Evidence must come only from supporting analyzer findings.");
-  assert(item.evidence.every((evidence) => evidence.summary && evidence.detectorVersion && evidence.evidence && typeof evidence.evidence === "object"), "Evidence must preserve analyzer summary, detector version, and structured evidence.");
+  for (const evidence of item.evidence) {
+    assert(item.supportingFindingIds.includes(evidence.ruleId), "Evidence must come only from supporting analyzer findings.");
+    assert(analyzerFindingIds.has(evidence.ruleId), `${evidence.ruleId} must originate in the persisted Phase 6 run.`);
+    assert(evidence.summary && evidence.detectorVersion, `${evidence.ruleId} must preserve summary and detector version.`);
+    assert(evidence.evidence && typeof evidence.evidence === "object", `${evidence.ruleId} must preserve structured detector evidence.`);
+    assert(evidence.result && typeof evidence.result === "object", `${evidence.ruleId} must preserve structured detector result data.`);
+    assert(typeof evidence.applicable === "boolean", `${evidence.ruleId} must preserve analyzer applicability.`);
+    assert(typeof evidence.scoring?.matched === "boolean" && typeof evidence.scoring?.included === "boolean", `${evidence.ruleId} must preserve Phase 7 scoring traceability.`);
+  }
 }
-console.log("✓ Supporting Phase 6 findings remain complete, unique, and evidence-backed for every recommendation");
+console.log("✓ Supporting Phase 6 findings and Phase 7 scoring participation remain complete and traceable for every recommendation");
 
+assert(recommendations.opportunityEngineVersion === detail.intelligence.opportunityRun.opportunityEngineVersion, "Opportunity Engine version must reconcile.");
+assert(recommendations.scoringModelVersion === detail.intelligence.scoringRun.scoringModelVersion, "Scoring model version must reconcile.");
 assert(detail.leadScore.available === false && detail.leadScore.score === null, "Recommendations must not create commercial Lead Scoring.");
-console.log("✓ Website recommendations remain separate from deferred business-level Lead Scoring");
+console.log("✓ Engine versions remain reproducible and website recommendations stay separate from deferred Lead Scoring");
 
 console.log("\nPhase 10 Recommendations & Evidence smoke test passed.\n");
