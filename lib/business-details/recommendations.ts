@@ -1,5 +1,6 @@
 import type { AnalyzerCategory, ConfidenceLevel, RuleStatus } from "@/lib/website-analyzer/types";
 import type { WebsiteOpportunity } from "@/lib/website-opportunities/types";
+import type { RuleScoreExclusionReason } from "@/lib/website-scoring/types";
 import type { BusinessDetailAnalyzerFindings, BusinessDetailOpportunityRun } from "./types";
 
 export type BusinessDetailRecommendationEvidence = {
@@ -7,9 +8,18 @@ export type BusinessDetailRecommendationEvidence = {
   category: AnalyzerCategory;
   status: RuleStatus;
   confidence: ConfidenceLevel;
+  applicable: boolean;
   summary: string;
+  result: Record<string, unknown>;
   evidence: Record<string, unknown>;
   detectorVersion: string;
+  scoring: {
+    matched: boolean;
+    included: boolean;
+    exclusionReason: RuleScoreExclusionReason | null;
+    earnedPoints: number | null;
+    maxPoints: number | null;
+  };
 };
 
 export type BusinessDetailRecommendation = WebsiteOpportunity & {
@@ -72,9 +82,12 @@ export function buildBusinessDetailRecommendations(
         category: finding.category,
         status: finding.status,
         confidence: finding.confidence,
+        applicable: finding.applicable,
         summary: finding.summary,
+        result: finding.result,
         evidence: finding.evidence,
         detectorVersion: finding.detectorVersion,
+        scoring: finding.scoring,
       }];
     });
 
