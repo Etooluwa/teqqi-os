@@ -17,6 +17,21 @@ function scoreTone(value: number | null) {
   return "text-emerald-600";
 }
 
+function statusTone(status: string) {
+  if (status === "PASS") return "bg-emerald-50 text-emerald-700";
+  if (status === "WARNING") return "bg-amber-50 text-amber-700";
+  if (status === "FAIL") return "bg-rose-50 text-rose-700";
+  if (status === "NOT_APPLICABLE") return "bg-slate-100 text-slate-500";
+  return "bg-indigo-50 text-indigo-700";
+}
+
+function findingBorder(status: string) {
+  if (status === "FAIL") return "border-rose-200";
+  if (status === "WARNING") return "border-amber-200";
+  if (status === "PASS") return "border-emerald-200";
+  return "border-slate-200";
+}
+
 export default async function BusinessDetailPage({ params }: { params: Promise<{ externalId: string }> }) {
   const { externalId } = await params;
 
@@ -74,6 +89,68 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Score breakdown</h2><p className="mt-1 text-sm text-slate-500">Six scoring categories from the latest completed Phase 7 run.</p></div>{breakdown.capApplied && <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Critical cap {breakdown.appliedCriticalCap}</span>}</div>
           {breakdown.categories.length > 0 ? <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{breakdown.categories.map((category) => <div key={category.category} className="rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold">{label(category.category)}</p><p className={`text-xl font-bold ${scoreTone(category.score)}`}>{category.score === null ? "—" : Math.round(category.score)}</p></div><p className="mt-2 text-xs text-slate-500">Weight {category.weight}% · {category.includedRuleCount} included · {category.excludedRuleCount} excluded</p></div>)}</div> : <p className="mt-5 text-sm text-slate-500">Score breakdown is unavailable until this website has a completed scoring run.</p>}
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div>
+              <h2 className="text-lg font-semibold">Analyzer findings</h2>
+              <p className="mt-1 text-sm text-slate-500">Persisted Phase 6 evidence grouped by audit category and tied to the exact scoring run.</p>
+            </div>
+            {findings.available && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Analyzer {findings.analyzerVersion ?? "version unavailable"}</span>}
+          </div>
+
+          {findings.available ? (
+            <div className="mt-5 space-y-4">
+              {findings.groups.map((group) => (
+                <details key={group.category} className="group rounded-xl border border-slate-200 bg-slate-50/60 open:bg-white">
+                  <summary className="cursor-pointer list-none p-4 sm:p-5">
+                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                      <div>
+                        <p className="font-semibold">{label(group.category)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{group.findingCount} findings</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">{group.passCount} pass</span>
+                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{group.warningCount} warning</span>
+                        <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">{group.failCount} fail</span>
+                        {group.unknownCount > 0 && <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">{group.unknownCount} unknown</span>}
+                        {group.notApplicableCount > 0 && <span className="rounded-full bg-slate-200 px-2.5 py-1 text-slate-600">{group.notApplicableCount} N/A</span>}
+                      </div>
+                    </div>
+                  </summary>
+
+                  <div className="space-y-3 border-t border-slate-200 p-4 sm:p-5">
+                    {group.findings.map((finding) => (
+                      <div key={finding.ruleId} className={`rounded-xl border bg-white p-4 ${findingBorder(finding.status)}`}>
+                        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone(finding.status)}`}>{label(finding.status)}</span>
+                              <span className="text-xs font-medium text-slate-400">{finding.ruleId}</span>
+                            </div>
+                            <p className="mt-3 text-sm font-medium leading-6 text-slate-800">{finding.summary}</p>
+                          </div>
+                          <div className="shrink-0 text-left text-xs text-slate-500 sm:text-right">
+                            <p>{label(finding.confidence)} confidence</p>
+                            <p className="mt-1">Detector {finding.detectorVersion}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <span>{finding.applicable ? "Applicable" : "Not applicable"}</span>
+                          {finding.scoring.matched && <span>{finding.scoring.included ? "Included in score" : `Excluded from score${finding.scoring.exclusionReason ? ` · ${label(finding.scoring.exclusionReason)}` : ""}`}</span>}
+                          {finding.scoring.earnedPoints !== null && finding.scoring.maxPoints !== null && <span>{finding.scoring.earnedPoints}/{finding.scoring.maxPoints} points</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-5 text-sm text-slate-500">Analyzer findings are unavailable until this website has a completed scoring run with persisted analyzer evidence.</p>
+          )}
         </section>
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
