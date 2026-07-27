@@ -17,7 +17,8 @@
     "test:phase11:monitoring": "node scripts/phase11-logging-monitoring-smoke-test.mjs",
     "test:phase11:performance": "node scripts/phase11-performance-review-smoke-test.mjs",
     "test:phase11:security": "node scripts/phase11-security-review-smoke-test.mjs",
-    "test:phase11:e2e": "node scripts/phase11-end-to-end-smoke-test.mjs"
+    "test:phase11:e2e": "node scripts/phase11-end-to-end-smoke-test.mjs",
+    "test:phase11:deployment": "node scripts/phase11-deployment-readiness-smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
