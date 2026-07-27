@@ -1,3 +1,5 @@
+import { selectAnalyzableBusiness } from "./helpers/select-analyzable-business.mjs";
+
 const TARGET = process.env.TEQQI_APP_URL ?? "http://localhost:3000";
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -7,16 +9,15 @@ console.log(`Target app: ${TARGET}\n`);
 const dashboardResponse = await fetch(`${TARGET}/api/dashboard`);
 const dashboardBody = await dashboardResponse.json();
 assert(dashboardResponse.ok && dashboardBody.ok === true, `Dashboard API failed: ${JSON.stringify(dashboardBody)}`);
-const candidate = dashboardBody.dashboard.rankedBusinesses.find((row) => row.websiteUrl);
-assert(candidate?.externalId && candidate?.websiteUrl, "A discovered business with a website is required.");
 
-const runResponse = await fetch(`${TARGET}/api/websites/opportunities`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: candidate.websiteUrl, forceRefresh: true }),
-});
-const runBody = await runResponse.json();
-assert(runResponse.ok && runBody.ok === true, `Fresh opportunity run failed: ${JSON.stringify(runBody)}`);
+const { candidate, body: runBody, skipped } = await selectAnalyzableBusiness(
+  TARGET,
+  dashboardBody.dashboard.rankedBusinesses,
+);
+if (skipped.length > 0) {
+  console.log(`↪ Skipped ${skipped.length} live website(s) that could not be safely analyzed right now.`);
+}
+assert(runBody?.ok === true, `Fresh opportunity run failed: ${JSON.stringify(runBody)}`);
 
 const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
 const body = await response.json();
