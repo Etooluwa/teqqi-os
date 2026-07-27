@@ -9,6 +9,7 @@ console.log(`Target app: ${TARGET}\n`);
 const discoveryPersistence = await readFile(new URL("../lib/business-discovery/persistence.ts", import.meta.url), "utf8");
 const discoveryRoute = await readFile(new URL("../app/api/businesses/search/route.ts", import.meta.url), "utf8");
 const scoringPersistence = await readFile(new URL("../lib/website-scoring/persistence.ts", import.meta.url), "utf8");
+const opportunityPersistence = await readFile(new URL("../lib/website-opportunities/persistence.ts", import.meta.url), "utf8");
 const opportunityRoute = await readFile(new URL("../app/api/websites/opportunities/route.ts", import.meta.url), "utf8");
 const refreshControl = await readFile(new URL("../app/businesses/[externalId]/refresh-analysis-button.tsx", import.meta.url), "utf8");
 
@@ -44,7 +45,9 @@ assert(opportunityRoute.includes("WEBSITE_AUDIT_RECOVERY_TTL_MS"), "Opportunity 
 assert(opportunityRoute.includes("resumeScoringRunId"), "Opportunity pipeline must accept explicit checkpoint resume requests.");
 assert(opportunityRoute.includes("analyzerRerun: false"), "Successful resume must explicitly state that analyzer work was not repeated.");
 assert(opportunityRoute.includes("resumable: true"), "Partial post-scoring failures must return resumable recovery metadata.");
-console.log("✓ Post-scoring failures preserve a resumable checkpoint instead of discarding completed work");
+assert(opportunityPersistence.includes("findCompletedOpportunityRunForScoringRun"), "Opportunity persistence must support idempotent checkpoint lookup.");
+assert(opportunityRoute.includes("reusedCompletedOpportunityRun: true"), "Repeated resume requests must reuse an already-completed opportunity run.");
+console.log("✓ Post-scoring failures preserve an idempotent resumable checkpoint instead of discarding or duplicating completed work");
 
 assert(refreshControl.includes("resumeScoringRunId"), "Refresh UI must retain a scoring checkpoint after a partial failure.");
 assert(refreshControl.includes("Resume analysis"), "Refresh UI must expose a resume state to the user.");
