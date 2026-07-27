@@ -15,7 +15,7 @@ type PersistOpportunityRunInput = {
   result: WebsiteOpportunityEngineResult;
 };
 
-type OpportunityRunRow = {
+export type OpportunityRunRow = {
   id: string;
   scoring_run_id: string;
   website_id: string | null;
@@ -88,6 +88,17 @@ export async function findReusableWebsiteOpportunityRun(
       && row.scoring_model_version === SCORING_MODEL_VERSION
       && row.opportunity_engine_version === OPPORTUNITY_ENGINE_VERSION;
   }) ?? null;
+}
+
+export async function findCompletedOpportunityRunForScoringRun(
+  scoringRunId: string,
+): Promise<OpportunityRunRow | null> {
+  if (!scoringRunId.trim()) return null;
+  const encoded = encodeURIComponent(scoringRunId);
+  const rows = await supabaseRest<OpportunityRunRow[]>(
+    `/website_opportunity_runs?scoring_run_id=eq.${encoded}&status=eq.COMPLETED&select=*&order=created_at.desc&limit=1`,
+  );
+  return rows[0] ?? null;
 }
 
 function opportunityPayload(runId: string, opportunity: WebsiteOpportunity) {
