@@ -1,3 +1,5 @@
+import { selectAnalyzableBusiness } from "./helpers/select-analyzable-business.mjs";
+
 const TARGET = process.env.TEQQI_APP_URL ?? "http://localhost:3000";
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -8,14 +10,20 @@ const dashboardResponse = await fetch(`${TARGET}/api/dashboard`);
 const dashboardBody = await dashboardResponse.json();
 assert(dashboardResponse.ok && dashboardBody.ok === true, `Dashboard API failed: ${JSON.stringify(dashboardBody)}`);
 
-const candidate = dashboardBody.dashboard.rankedBusinesses.find((row) => row.intelligenceAvailable)
-  ?? dashboardBody.dashboard.rankedBusinesses[0];
-assert(candidate?.externalId, "A discovered business is required for the Phase 10 score breakdown test.");
+const selection = await selectAnalyzableBusiness(TARGET, dashboardBody.dashboard.rankedBusinesses);
+const { candidate, skipped, source } = selection;
+if (skipped.length > 0) {
+  console.log(`↪ Skipped ${skipped.length} live website(s) that could not be safely analyzed right now.`);
+}
 
-const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
-const body = await response.json();
-assert(response.ok && body.ok === true, `Business detail API failed: ${JSON.stringify(body)}`);
-const detail = body.detail;
+let detail = selection.detail;
+if (!detail) {
+  const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
+  const body = await response.json();
+  assert(response.ok && body.ok === true, `Business detail API failed: ${JSON.stringify(body)}`);
+  detail = body.detail;
+}
+
 assert(detail, "Business detail API must return detail.");
 const breakdown = detail.intelligence.scoreBreakdown;
 
@@ -60,6 +68,10 @@ if (detail.intelligence.scoringRun) {
   assert(breakdown.unavailableReason === "NO_COMPLETED_SCORING_RUN", "Missing scoring intelligence must have an explicit reason.");
   assert(breakdown.categories.length === 0, "Missing scoring intelligence must not fabricate category scores.");
   console.log("✓ Missing scoring intelligence remains explicit and does not fabricate category scores");
+}
+
+if (source === "NO_INTELLIGENCE_AVAILABLE") {
+  console.log("↪ No safe live analysis or persisted intelligence was available; validating the explicit unavailable score state.");
 }
 
 assert(detail.leadScore.available === false && detail.leadScore.score === null, "Score breakdown must not fabricate a commercial Lead Score.");
