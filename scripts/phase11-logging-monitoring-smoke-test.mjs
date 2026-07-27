@@ -43,8 +43,10 @@ assert(monitoringSource.includes("MONITORING_WINDOW_MS"), "Monitoring must use a
 assert(monitoringSource.includes("staleRunningSearches"), "Monitoring must surface stale active discovery work.");
 assert(monitoringSource.includes("rateLimitedSearches"), "Monitoring must surface provider rate-limit signals.");
 assert(monitoringSource.includes("failedScoringRuns") && monitoringSource.includes("failedOpportunityRuns"), "Monitoring must expose persisted website-run failure counts.");
+assert(monitoringSource.includes("detailedSignalsAvailable"), "Monitoring must explicitly represent partial telemetry availability.");
+assert(monitoringSource.includes("status-level search monitoring remains active"), "Monitoring must degrade safely when detailed search telemetry is unavailable.");
 assert(monitoringSource.includes("business content and provider payloads are not included"), "Monitoring contract must explicitly avoid business/provider content.");
-console.log("✓ Monitoring aggregates operational health without exposing business or provider payload content");
+console.log("✓ Monitoring aggregates operational health and degrades safely without exposing business or provider payload content");
 
 const requestId = `phase11-monitoring-${Date.now()}`;
 const response = await fetch(`${TARGET}/api/health/monitoring`, {
@@ -56,6 +58,7 @@ assert(response.headers.get("x-request-id") === requestId, "Monitoring endpoint 
 assert(["HEALTHY", "DEGRADED"].includes(body.monitoring?.status), "Monitoring status must use the approved health states.");
 assert(typeof body.monitoring?.generatedAt === "string" && typeof body.monitoring?.windowMs === "number", "Monitoring must include snapshot metadata.");
 assert(body.monitoring?.signals && body.monitoring?.executions, "Monitoring must expose signals and execution summaries.");
+assert(typeof body.monitoring?.telemetry?.searchErrorCodeSignalsAvailable === "boolean", "Monitoring must disclose whether detailed search error-code telemetry is available.");
 for (const key of ["searches", "scoringRuns", "opportunityRuns"]) {
   assert(typeof body.monitoring.executions[key]?.total === "number", `${key} monitoring total is required.`);
   assert(body.monitoring.executions[key]?.byStatus && typeof body.monitoring.executions[key].byStatus === "object", `${key} status summary is required.`);
