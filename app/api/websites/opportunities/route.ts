@@ -10,16 +10,21 @@ import {
 } from "@/lib/website-opportunities/persistence";
 import { generateWebsiteOpportunities } from "@/lib/website-opportunities/service";
 import type { OpportunityFindingInput } from "@/lib/website-opportunities/types";
-import { getWebsiteScoringRun, persistWebsiteScoringRun } from "@/lib/website-scoring/persistence";
+import {
+  getRecoverableWebsiteScoringRun,
+  getWebsiteScoringRun,
+  persistWebsiteScoringRun,
+} from "@/lib/website-scoring/persistence";
 import { WebsiteScoringError } from "@/lib/website-scoring/rule-score";
 import { scoreWebsite, type WebsiteScoringInput } from "@/lib/website-scoring/service";
-import type { ScorableFinding, ScoringCategory } from "@/lib/website-scoring/types";
+import type { ScorableFinding, ScoringCategory, UnifiedWebsiteScoringResult } from "@/lib/website-scoring/types";
 
 export const runtime = "nodejs";
 
 const WEBSITE_AUDIT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const WEBSITE_AUDIT_RECOVERY_TTL_MS = 60 * 60 * 1000;
 
-type OpportunityRequest = { url: string; forceRefresh?: boolean };
+type OpportunityRequest = { url: string; forceRefresh?: boolean; resumeScoringRunId?: string };
 
 function invalidRequest(message: string) {
   return NextResponse.json(
@@ -48,8 +53,23 @@ function toOpportunityFinding(finding: AnalyzerFinding): OpportunityFindingInput
   };
 }
 
+function generateFromPersistedScoring(findings: AnalyzerFinding[], scoring: UnifiedWebsiteScoringResult) {
+  return generateWebsiteOpportunities({
+    findings: findings.map(toOpportunityFinding),
+    scoring: {
+      websiteScore: scoring.websiteScore,
+      categoryScores: Object.fromEntries(
+        scoring.categoryScores.map((category) => [category.category, category.score]),
+      ),
+      criticalFailureCount: scoring.criticalFailureCount,
+      scoringModelVersion: scoring.scoringModelVersion,
+    },
+  });
+}
+
 export async function POST(request: Request) {
   let body: Partial<OpportunityRequest>;
+  let recoveryScoringRunId: string | null = null;
 
   try {
     body = (await request.json()) as Partial<OpportunityRequest>;
@@ -62,6 +82,72 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (typeof body.resumeScoringRunId === "string" && body.resumeScoringRunId.trim()) {
+      const checkpoint = await getRecoverableWebsiteScoringRun(
+        body.resumeScoringRunId,
+        body.url,
+        WEBSITE_AUDIT_RECOVERY_TTL_MS,
+      );
+      if (!checkpoint || !checkpoint.analyzer_findings) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: {
+              code: "RECOVERY_CHECKPOINT_INVALID",
+              message: "The website audit checkpoint is missing, stale, incompatible, or belongs to a different website.",
+              retryable: false,
+            },
+          },
+          { status: 409 },
+        );
+      }
+
+      recoveryScoringRunId = checkpoint.id;
+      const opportunityResult = generateFromPersistedScoring(
+        checkpoint.analyzer_findings,
+        checkpoint.explanation,
+      );
+      const opportunityPersistence = await persistWebsiteOpportunityRun({
+        scoringRunId: checkpoint.id,
+        websiteId: checkpoint.website_id,
+        requestedUrl: body.url,
+        finalUrl: checkpoint.final_url,
+        analyzerVersion: checkpoint.analyzer_version,
+        result: opportunityResult,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        opportunityRunId: opportunityPersistence.opportunityRunId,
+        scoringRunId: checkpoint.id,
+        websiteId: checkpoint.website_id,
+        analyzerVersion: checkpoint.analyzer_version,
+        requestedUrl: body.url,
+        finalUrl: checkpoint.final_url,
+        scoring: {
+          websiteScore: checkpoint.explanation.websiteScore,
+          scoringModelVersion: checkpoint.explanation.scoringModelVersion,
+          criticalFailureCount: checkpoint.explanation.criticalFailureCount,
+        },
+        opportunityResult,
+        persistence: {
+          stored: true,
+          historicalResultImmutable: true,
+        },
+        recovery: {
+          resumed: true,
+          scoringRunId: checkpoint.id,
+          analyzerRerun: false,
+          checkpointTtlMs: WEBSITE_AUDIT_RECOVERY_TTL_MS,
+        },
+        cache: {
+          hit: false,
+          ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
+          forceRefresh: body.forceRefresh === true,
+        },
+      });
+    }
+
     if (body.forceRefresh !== true) {
       const cachedOpportunityRun = await findReusableWebsiteOpportunityRun(
         body.url,
@@ -128,18 +214,9 @@ export async function POST(request: Request) {
       analyzerFindings: allFindings,
       scoring,
     });
+    recoveryScoringRunId = scoringPersistence.scoringRunId;
 
-    const opportunityResult = generateWebsiteOpportunities({
-      findings: allFindings.map(toOpportunityFinding),
-      scoring: {
-        websiteScore: scoring.websiteScore,
-        categoryScores: Object.fromEntries(
-          scoring.categoryScores.map((category) => [category.category, category.score]),
-        ),
-        criticalFailureCount: scoring.criticalFailureCount,
-        scoringModelVersion: scoring.scoringModelVersion,
-      },
-    });
+    const opportunityResult = generateFromPersistedScoring(allFindings, scoring);
 
     const opportunityPersistence = await persistWebsiteOpportunityRun({
       scoringRunId: scoringPersistence.scoringRunId,
@@ -168,6 +245,11 @@ export async function POST(request: Request) {
         stored: true,
         historicalResultImmutable: true,
       },
+      recovery: {
+        resumed: false,
+        scoringRunId: scoringPersistence.scoringRunId,
+        checkpointTtlMs: WEBSITE_AUDIT_RECOVERY_TTL_MS,
+      },
       cache: {
         hit: false,
         ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
@@ -175,6 +257,14 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    const recovery = recoveryScoringRunId
+      ? {
+          resumable: true,
+          scoringRunId: recoveryScoringRunId,
+          checkpointTtlMs: WEBSITE_AUDIT_RECOVERY_TTL_MS,
+        }
+      : undefined;
+
     if (error instanceof WebsiteAnalyzerError) {
       return NextResponse.json(
         { ok: false, error: { code: error.code, message: error.message } },
@@ -191,7 +281,7 @@ export async function POST(request: Request) {
 
     if (error instanceof WebsiteOpportunityError) {
       return NextResponse.json(
-        { ok: false, error: { code: "OPPORTUNITY_ERROR", message: error.message } },
+        { ok: false, error: { code: "OPPORTUNITY_ERROR", message: error.message }, recovery },
         { status: 422 },
       );
     }
@@ -202,10 +292,13 @@ export async function POST(request: Request) {
         ok: false,
         error: {
           code: "INTERNAL_ERROR",
-          message: "The website could not be analyzed for opportunities.",
+          message: recovery
+            ? "The opportunity stage failed after scoring completed. Retry using the preserved scoring checkpoint."
+            : "The website could not be analyzed for opportunities.",
         },
+        recovery,
       },
-      { status: 500 },
+      { status: recovery ? 503 : 500 },
     );
   }
 }
