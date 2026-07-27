@@ -74,20 +74,20 @@ export async function findReusableWebsiteOpportunityRun(
   const domain = canonicalDomain(rawUrl);
   if (!domain || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return null;
 
-  const cutoff = Date.now() - maxAgeMs;
-  const rows = await supabaseRest<OpportunityRunRow[]>(
-    "/website_opportunity_runs?status=eq.COMPLETED&select=*&order=created_at.desc&limit=1000",
-  );
+  const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+  const query = new URLSearchParams({
+    status: "eq.COMPLETED",
+    analyzer_version: `eq.${WEBSITE_ANALYZER_VERSION}`,
+    scoring_model_version: `eq.${SCORING_MODEL_VERSION}`,
+    opportunity_engine_version: `eq.${OPPORTUNITY_ENGINE_VERSION}`,
+    created_at: `gte.${cutoff}`,
+    select: "*",
+    order: "created_at.desc",
+    limit: "250",
+  });
+  const rows = await supabaseRest<OpportunityRunRow[]>(`/website_opportunity_runs?${query.toString()}`);
 
-  return rows.find((row) => {
-    const createdAt = Date.parse(row.created_at);
-    return Number.isFinite(createdAt)
-      && createdAt >= cutoff
-      && canonicalDomain(row.final_url) === domain
-      && row.analyzer_version === WEBSITE_ANALYZER_VERSION
-      && row.scoring_model_version === SCORING_MODEL_VERSION
-      && row.opportunity_engine_version === OPPORTUNITY_ENGINE_VERSION;
-  }) ?? null;
+  return rows.find((row) => canonicalDomain(row.final_url) === domain) ?? null;
 }
 
 export async function findCompletedOpportunityRunForScoringRun(
