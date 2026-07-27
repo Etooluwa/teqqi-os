@@ -16,7 +16,7 @@ assert(candidate?.externalId && candidate?.websiteUrl, "A discovered business wi
 const analyzeResponse = await fetch(`${TARGET}/api/websites/opportunities`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: candidate.websiteUrl }),
+  body: JSON.stringify({ url: candidate.websiteUrl, forceRefresh: true }),
 });
 const analyzeBody = await analyzeResponse.json();
 assert(analyzeResponse.ok && analyzeBody.ok === true, `Fresh website intelligence run failed: ${JSON.stringify(analyzeBody)}`);
