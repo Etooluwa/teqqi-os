@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:phase5": "node scripts/phase5-smoke-test.mjs",
     "test:phase10": "node scripts/phase10-final-smoke-test.mjs",
-    "test:phase11:search-cache": "node scripts/phase11-business-search-cache-smoke-test.mjs"
+    "test:phase11:search-cache": "node scripts/phase11-business-search-cache-smoke-test.mjs",
+    "test:phase11:audit-cache": "node scripts/phase11-website-audit-cache-smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
