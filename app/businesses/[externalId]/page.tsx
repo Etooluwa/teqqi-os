@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { buildBusinessDetailSnapshot, BusinessDetailError } from "@/lib/business-details/service";
+import { RefreshAnalysisButton } from "./refresh-analysis-button";
 
 export const dynamic = "force-dynamic";
 
@@ -101,12 +102,13 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
         </section>
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <h2 className="text-lg font-semibold">Audit metadata</h2>
               <p className="mt-1 text-sm text-slate-500">Exact persisted runs behind the intelligence shown on this page.</p>
+              <span className="mt-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Last analyzed {formatAuditDate(latestAuditAt)}</span>
             </div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Last analyzed {formatAuditDate(latestAuditAt)}</span>
+            <RefreshAnalysisButton websiteUrl={detail.business.websiteUrl} />
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
