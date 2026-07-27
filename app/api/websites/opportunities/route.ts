@@ -5,6 +5,7 @@ import { prepareWebsiteAnalysis } from "@/lib/website-analyzer/service";
 import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
 import { WebsiteOpportunityError } from "@/lib/website-opportunities/detection";
 import {
+  findCompletedOpportunityRunForScoringRun,
   findReusableWebsiteOpportunityRun,
   persistWebsiteOpportunityRun,
 } from "@/lib/website-opportunities/persistence";
@@ -103,6 +104,41 @@ export async function POST(request: Request) {
       }
 
       recoveryScoringRunId = checkpoint.id;
+      const existingOpportunityRun = await findCompletedOpportunityRunForScoringRun(checkpoint.id);
+      if (existingOpportunityRun) {
+        return NextResponse.json({
+          ok: true,
+          opportunityRunId: existingOpportunityRun.id,
+          scoringRunId: checkpoint.id,
+          websiteId: checkpoint.website_id,
+          analyzerVersion: checkpoint.analyzer_version,
+          requestedUrl: body.url,
+          finalUrl: checkpoint.final_url,
+          scoring: {
+            websiteScore: checkpoint.explanation.websiteScore,
+            scoringModelVersion: checkpoint.explanation.scoringModelVersion,
+            criticalFailureCount: checkpoint.explanation.criticalFailureCount,
+          },
+          opportunityResult: existingOpportunityRun.result,
+          persistence: {
+            stored: false,
+            historicalResultImmutable: true,
+          },
+          recovery: {
+            resumed: true,
+            scoringRunId: checkpoint.id,
+            analyzerRerun: false,
+            reusedCompletedOpportunityRun: true,
+            checkpointTtlMs: WEBSITE_AUDIT_RECOVERY_TTL_MS,
+          },
+          cache: {
+            hit: false,
+            ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
+            forceRefresh: body.forceRefresh === true,
+          },
+        });
+      }
+
       const opportunityResult = generateFromPersistedScoring(
         checkpoint.analyzer_findings,
         checkpoint.explanation,
@@ -138,6 +174,7 @@ export async function POST(request: Request) {
           resumed: true,
           scoringRunId: checkpoint.id,
           analyzerRerun: false,
+          reusedCompletedOpportunityRun: false,
           checkpointTtlMs: WEBSITE_AUDIT_RECOVERY_TTL_MS,
         },
         cache: {
