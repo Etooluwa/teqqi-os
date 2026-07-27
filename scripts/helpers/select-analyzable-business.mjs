@@ -11,6 +11,21 @@ const SKIPPABLE_LIVE_SITE_CODES = new Set([
   "URL_CREDENTIALS_NOT_ALLOWED",
 ]);
 
+async function loadPersistedBusinessDetail(target, candidate) {
+  const response = await fetch(`${target}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
+  const body = await response.json().catch(() => null);
+  if (!response.ok || body?.ok !== true) return null;
+
+  const detail = body.detail;
+  const hasScoring = Boolean(detail?.intelligence?.scoringRun?.scoringRunId);
+  const hasFindings = detail?.intelligence?.analyzerFindings?.available === true;
+  const hasOpportunity = Boolean(detail?.intelligence?.opportunityRun?.opportunityRunId);
+  const hasRecommendations = detail?.intelligence?.recommendations?.available === true;
+
+  if (!hasScoring || !hasFindings || !hasOpportunity || !hasRecommendations) return null;
+  return { response, body };
+}
+
 export async function selectAnalyzableBusiness(target, rankedBusinesses) {
   const candidates = rankedBusinesses.filter((row) => row?.externalId && row?.websiteUrl);
   if (candidates.length === 0) {
@@ -27,7 +42,7 @@ export async function selectAnalyzableBusiness(target, rankedBusinesses) {
     const body = await response.json().catch(() => null);
 
     if (response.ok && body?.ok === true) {
-      return { candidate, response, body, skipped };
+      return { candidate, response, body, skipped, source: "FRESH_LIVE_RUN", detail: null };
     }
 
     const code = body?.error?.code;
@@ -39,7 +54,21 @@ export async function selectAnalyzableBusiness(target, rankedBusinesses) {
     throw new Error(`Website intelligence pipeline failed for ${candidate.websiteUrl}: ${JSON.stringify(body)}`);
   }
 
+  for (const candidate of candidates) {
+    const persisted = await loadPersistedBusinessDetail(target, candidate);
+    if (persisted) {
+      return {
+        candidate,
+        response: null,
+        body: null,
+        skipped,
+        source: "PERSISTED_INTELLIGENCE_FALLBACK",
+        detail: persisted.body.detail,
+      };
+    }
+  }
+
   throw new Error(
-    `No currently analyzable live website was available. Skipped ${skipped.length} site-specific failures: ${skipped.map((item) => `${item.code}:${item.websiteUrl}`).join(", ")}`,
+    `No analyzable live website or persisted business intelligence was available. Skipped ${skipped.length} site-specific failures: ${skipped.map((item) => `${item.code}:${item.websiteUrl}`).join(", ")}`,
   );
 }
