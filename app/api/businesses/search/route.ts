@@ -4,13 +4,16 @@ import { GooglePlacesError, searchGooglePlaces } from "@/lib/business-discovery/
 import {
   createSearchExecution,
   finalizeSearchExecution,
+  findRecentCompletedSearch,
   getPreviouslyDiscoveredPlaceIds,
   storeSearchPlaceReferences,
 } from "@/lib/business-discovery/persistence";
 import type { BusinessSearchInput } from "@/lib/business-discovery/types";
 
 export const runtime = "nodejs";
-type SearchRequestBody = Partial<BusinessSearchInput>;
+
+const BUSINESS_SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
+type SearchRequestBody = Partial<BusinessSearchInput> & { reuseRecent?: boolean };
 
 function parseInput(body: SearchRequestBody): BusinessSearchInput {
   const industry = typeof body.industry === "string" ? body.industry.trim() : "";
@@ -30,6 +33,39 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SearchRequestBody;
     const input = parseInput(body);
     const query = `${input.industry} in ${input.location}`;
+    const reuseRecent = body.reuseRecent === true;
+
+    if (reuseRecent) {
+      const cachedSearch = await findRecentCompletedSearch(input, BUSINESS_SEARCH_CACHE_TTL_MS);
+      if (cachedSearch) {
+        return NextResponse.json({
+          ok: true,
+          searchId: cachedSearch.id,
+          query: cachedSearch.query_text ?? query,
+          provider: "GOOGLE_PLACES",
+          requestedMaxResults: cachedSearch.requested_max_results,
+          returnedResults: cachedSearch.result_count ?? 0,
+          results: [],
+          discovery: {
+            mode: "RECENT_SEARCH_REUSE",
+            requestedNewResults: input.maxResults,
+            returnedNewResults: cachedSearch.result_count ?? 0,
+          },
+          cache: {
+            hit: true,
+            ttlMs: BUSINESS_SEARCH_CACHE_TTL_MS,
+            cachedSearchId: cachedSearch.id,
+            cachedAt: cachedSearch.created_at,
+          },
+          persistence: {
+            stored: true,
+            reusedExistingSearch: true,
+            storedFields: ["search inputs", "provider", "Google Place ID", "result position"],
+            googlePlaceContentPersisted: false,
+          },
+        });
+      }
+    }
 
     const previouslyDiscovered = await getPreviouslyDiscoveredPlaceIds();
     searchId = await createSearchExecution(input, query);
@@ -38,9 +74,6 @@ export async function POST(request: Request) {
     await storeSearchPlaceReferences(searchId, result.results);
     await finalizeSearchExecution({
       searchId,
-      // Fewer results because Google exhausted the available unseen results is
-      // still a successful, complete search. PARTIAL is reserved for an actual
-      // interrupted provider/pagination execution.
       status: "COMPLETED",
       resultCount: result.returnedResults,
     });
@@ -56,8 +89,14 @@ export async function POST(request: Request) {
         returnedNewResults: result.returnedResults,
         exhaustedAvailableNewResults: result.returnedResults < input.maxResults,
       },
+      cache: {
+        hit: false,
+        eligible: reuseRecent,
+        ttlMs: BUSINESS_SEARCH_CACHE_TTL_MS,
+      },
       persistence: {
         stored: true,
+        reusedExistingSearch: false,
         storedFields: ["search inputs", "provider", "Google Place ID", "result position"],
         googlePlaceContentPersisted: false,
       },
