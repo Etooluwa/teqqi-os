@@ -8,8 +8,11 @@ const STALE_RUNNING_MS = 10 * 60 * 1000;
 type SearchHealthRow = {
   id: string;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
-  error_code: string | null;
   created_at: string;
+};
+
+type SearchHealthDetailRow = SearchHealthRow & {
+  error_code: string | null;
 };
 
 type RunHealthRow = {
@@ -25,15 +28,33 @@ function countStatuses<T extends { status: string }>(rows: T[]) {
   }, {});
 }
 
+async function loadSearchHealth(cutoff: string): Promise<{
+  rows: SearchHealthRow[];
+  detailRows: SearchHealthDetailRow[] | null;
+  detailedSignalsAvailable: boolean;
+}> {
+  const baseQuery = `created_at=gte.${encodeURIComponent(cutoff)}&order=created_at.desc&limit=500`;
+
+  try {
+    const detailRows = await supabaseRest<SearchHealthDetailRow[]>(
+      `/search_history?${baseQuery}&select=id,status,error_code,created_at`,
+    );
+    return { rows: detailRows, detailRows, detailedSignalsAvailable: true };
+  } catch {
+    const rows = await supabaseRest<SearchHealthRow[]>(
+      `/search_history?${baseQuery}&select=id,status,created_at`,
+    );
+    return { rows, detailRows: null, detailedSignalsAvailable: false };
+  }
+}
+
 export async function getOperationalMonitoringSnapshot() {
   const now = Date.now();
   const cutoff = new Date(now - MONITORING_WINDOW_MS).toISOString();
   const staleCutoff = now - STALE_RUNNING_MS;
 
-  const [searches, scoringRuns, opportunityRuns] = await Promise.all([
-    supabaseRest<SearchHealthRow[]>(
-      `/search_history?created_at=gte.${encodeURIComponent(cutoff)}&select=id,status,error_code,created_at&order=created_at.desc&limit=500`,
-    ),
+  const [searchHealth, scoringRuns, opportunityRuns] = await Promise.all([
+    loadSearchHealth(cutoff),
     supabaseRest<RunHealthRow[]>(
       `/website_scoring_runs?created_at=gte.${encodeURIComponent(cutoff)}&select=id,status,created_at&order=created_at.desc&limit=500`,
     ),
@@ -42,21 +63,31 @@ export async function getOperationalMonitoringSnapshot() {
     ),
   ]);
 
+  const searches = searchHealth.rows;
   const staleRunningSearches = searches.filter((row) =>
     row.status === "RUNNING" && Date.parse(row.created_at) < staleCutoff,
   ).length;
-  const rateLimitedSearches = searches.filter((row) => row.error_code === "GOOGLE_PLACES_RATE_LIMITED").length;
-  const recoveredStaleSearches = searches.filter((row) => row.error_code === "STALE_EXECUTION_RECOVERED").length;
+  const rateLimitedSearches = searchHealth.detailRows
+    ? searchHealth.detailRows.filter((row) => row.error_code === "GOOGLE_PLACES_RATE_LIMITED").length
+    : null;
+  const recoveredStaleSearches = searchHealth.detailRows
+    ? searchHealth.detailRows.filter((row) => row.error_code === "STALE_EXECUTION_RECOVERED").length
+    : null;
   const failedSearches = searches.filter((row) => row.status === "FAILED").length;
   const failedScoringRuns = scoringRuns.filter((row) => row.status === "FAILED").length;
   const failedOpportunityRuns = opportunityRuns.filter((row) => row.status === "FAILED").length;
 
-  const degraded = staleRunningSearches > 0 || rateLimitedSearches > 0;
+  const degraded = staleRunningSearches > 0
+    || (rateLimitedSearches ?? 0) > 0
+    || !searchHealth.detailedSignalsAvailable;
 
   return {
     status: degraded ? "DEGRADED" as const : "HEALTHY" as const,
     generatedAt: new Date(now).toISOString(),
     windowMs: MONITORING_WINDOW_MS,
+    telemetry: {
+      searchErrorCodeSignalsAvailable: searchHealth.detailedSignalsAvailable,
+    },
     signals: {
       staleRunningSearches,
       rateLimitedSearches,
@@ -72,7 +103,10 @@ export async function getOperationalMonitoringSnapshot() {
     },
     notes: [
       "Monitoring exposes aggregate operational counts only; business content and provider payloads are not included.",
-      "DEGRADED means a stale active search or a recent Google Places rate-limit event exists in the monitoring window.",
+      "DEGRADED means a stale active search, recent Google Places rate-limit event, or partial monitoring telemetry exists in the monitoring window.",
+      ...(searchHealth.detailedSignalsAvailable
+        ? []
+        : ["Detailed search error-code telemetry is temporarily unavailable; status-level search monitoring remains active."]),
     ],
   };
 }
