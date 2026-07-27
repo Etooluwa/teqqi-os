@@ -47,16 +47,17 @@ export function RefreshAnalysisButton({ websiteUrl }: RefreshAnalysisButtonProps
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
       <button
         type="button"
         onClick={refreshAnalysis}
         disabled={!websiteUrl || isRefreshing}
-        className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        aria-busy={isRefreshing}
+        className="w-full rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
       >
         {isRefreshing ? "Refreshing analysis…" : "Refresh analysis"}
       </button>
-      {!websiteUrl && <p className="text-xs text-slate-500">A website URL is required to run a fresh audit.</p>}
+      {!websiteUrl && <p className="max-w-sm text-xs leading-5 text-slate-500">No website was found for this business, so TEQQI OS cannot run a website audit yet.</p>}
       {error && <p role="alert" className="max-w-md text-xs leading-5 text-rose-600">{error}</p>}
     </div>
   );
