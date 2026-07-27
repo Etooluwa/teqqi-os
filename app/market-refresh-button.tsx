@@ -63,12 +63,12 @@ export function MarketRefreshButton({ searchId }: { searchId: string }) {
         onClick={refreshMarket}
         disabled={refreshing}
         aria-busy={refreshing}
-        className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 border border-[#d9d6cf] bg-[#f8f7f3] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2d2d29] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {refreshing ? "Refreshing market…" : "Refresh market"}
+        {refreshing ? "Refreshing…" : "Refresh market"}
       </button>
-      <p className="max-w-xs text-xs leading-5 text-slate-400">Bypasses the 15-minute search cache and asks Google for new unseen businesses.</p>
-      {error && <p role="alert" className="max-w-xs text-xs leading-5 text-rose-600">{error}</p>}
+      <p className="max-w-xs text-[10px] uppercase leading-4 tracking-[0.08em] text-[#8a8982]">Bypasses cache and requests unseen businesses.</p>
+      {error && <p role="alert" className="max-w-xs text-xs leading-5 text-[#9a3f34]">{error}</p>}
     </div>
   );
 }
