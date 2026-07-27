@@ -154,13 +154,19 @@ export async function persistWebsiteScoringRun(
   return { scoringRunId: run.id, websiteId };
 }
 
-export async function getWebsiteScoringRun(scoringRunId: string) {
+async function getScoringRun(scoringRunId: string): Promise<ScoringRunRow | null> {
   const encodedId = encodeURIComponent(scoringRunId);
   const [run] = await supabaseRest<ScoringRunRow[]>(
     `/website_scoring_runs?id=eq.${encodedId}&select=*&limit=1`,
   );
+  return run ?? null;
+}
+
+export async function getWebsiteScoringRun(scoringRunId: string) {
+  const run = await getScoringRun(scoringRunId);
   if (!run) return null;
 
+  const encodedId = encodeURIComponent(scoringRunId);
   const categories = await supabaseRest<CategoryRow[]>(
     `/website_scoring_category_results?scoring_run_id=eq.${encodedId}&select=*&order=category.asc`,
   );
@@ -175,8 +181,7 @@ export async function getRecoverableWebsiteScoringRun(
 ): Promise<ScoringRunRow | null> {
   if (!scoringRunId.trim() || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return null;
 
-  const persisted = await getWebsiteScoringRun(scoringRunId);
-  const run = persisted?.run;
+  const run = await getScoringRun(scoringRunId);
   if (!run || run.status !== "COMPLETED") return null;
 
   let requestedDomain: string;
