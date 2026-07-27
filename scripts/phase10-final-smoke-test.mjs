@@ -44,8 +44,8 @@ if (skipped.length > 0) {
 }
 
 let detail;
-let expectedScoringRunId;
-let expectedOpportunityRunId;
+let expectedScoringRunId = null;
+let expectedOpportunityRunId = null;
 
 if (source === "FRESH_LIVE_RUN") {
   const initialRunBody = selection.body;
@@ -77,13 +77,21 @@ if (source === "FRESH_LIVE_RUN") {
   expectedScoringRunId = refreshBody.scoringRunId;
   expectedOpportunityRunId = refreshBody.opportunityRunId;
   console.log("✓ Refresh analysis creates a new immutable Analyze → Score → Opportunities run chain and business details immediately resolve to it");
-} else {
+} else if (source === "PERSISTED_INTELLIGENCE_FALLBACK") {
   detail = selection.detail;
-  expectedScoringRunId = detail?.intelligence?.scoringRun?.scoringRunId;
-  expectedOpportunityRunId = detail?.intelligence?.opportunityRun?.opportunityRunId;
+  expectedScoringRunId = detail?.intelligence?.scoringRun?.scoringRunId ?? null;
+  expectedOpportunityRunId = detail?.intelligence?.opportunityRun?.opportunityRunId ?? null;
   assert(expectedScoringRunId && expectedOpportunityRunId, "Persisted fallback must preserve scoring/opportunity run traceability.");
   console.log("↪ Live refresh integration skipped because every current business website hit an approved site-specific safety failure.");
   console.log("✓ Persisted immutable scoring/opportunity run traceability remains available while live-site conditions are unsuitable");
+} else {
+  detail = selection.detail;
+  assert(detail?.intelligence?.scoringRun === null, "Unavailable intelligence must not fabricate a scoring run.");
+  assert(detail?.intelligence?.opportunityRun === null, "Unavailable intelligence must not fabricate an opportunity run.");
+  assert(detail?.intelligence?.analyzerFindings?.available === false, "Unavailable intelligence must keep analyzer findings explicit.");
+  assert(detail?.intelligence?.recommendations?.available === false, "Unavailable intelligence must keep recommendations explicit.");
+  console.log("↪ Live refresh integration skipped because the only current website hit an approved site-specific safety failure and no prior audit exists.");
+  console.log("✓ Business details preserve an explicit no-intelligence state without fabricating audit data");
 }
 
 const pageResponse = await fetch(`${TARGET}/businesses/${encodeURIComponent(candidate.externalId)}`);
@@ -96,13 +104,18 @@ for (const requiredText of [
   "Score breakdown",
   "Analyzer findings",
   "Recommendations",
-  "Last analyzed",
 ]) {
   assert(pageHtml.includes(requiredText), `Business detail page must render ${requiredText}.`);
 }
-assert(pageHtml.includes(expectedScoringRunId), "Rendered audit metadata must show the selected scoring run ID.");
-assert(pageHtml.includes(expectedOpportunityRunId), "Rendered audit metadata must show the selected opportunity run ID.");
-console.log("✓ Server-rendered business page exposes score, findings, recommendations, audit metadata, refresh control, and run traceability");
+if (expectedScoringRunId && expectedOpportunityRunId) {
+  assert(pageHtml.includes("Last analyzed"), "Audited business detail page must render Last analyzed metadata.");
+  assert(pageHtml.includes(expectedScoringRunId), "Rendered audit metadata must show the selected scoring run ID.");
+  assert(pageHtml.includes(expectedOpportunityRunId), "Rendered audit metadata must show the selected opportunity run ID.");
+  console.log("✓ Server-rendered business page exposes score, findings, recommendations, audit metadata, refresh control, and run traceability");
+} else {
+  assert(!pageHtml.includes("Tied to exact scoring run"), "Unaudited business page must not imply an immutable run chain exists.");
+  console.log("✓ Server-rendered business page exposes the audit sections and refresh control without fabricating run metadata");
+}
 
 const missingPageResponse = await fetch(`${TARGET}/businesses/not-a-real-teqqi-place-id`, { redirect: "manual" });
 const missingPageHtml = await missingPageResponse.text();
