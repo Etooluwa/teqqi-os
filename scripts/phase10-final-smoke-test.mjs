@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { selectAnalyzableBusiness } from "./helpers/select-analyzable-business.mjs";
 
 const TARGET = process.env.TEQQI_APP_URL ?? "http://localhost:3000";
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -35,8 +36,15 @@ console.log("\nPhase 10 UI, refresh, audit, and error-state checks\n");
 const dashboardResponse = await fetch(`${TARGET}/api/dashboard`);
 const dashboardBody = await dashboardResponse.json();
 assert(dashboardResponse.ok && dashboardBody.ok === true, `Dashboard API failed: ${JSON.stringify(dashboardBody)}`);
-const candidate = dashboardBody.dashboard.rankedBusinesses.find((row) => row.websiteUrl);
-assert(candidate?.externalId && candidate?.websiteUrl, "A discovered business with a website is required for the final Phase 10 test.");
+
+const { candidate, body: initialRunBody, skipped } = await selectAnalyzableBusiness(
+  TARGET,
+  dashboardBody.dashboard.rankedBusinesses,
+);
+if (skipped.length > 0) {
+  console.log(`↪ Skipped ${skipped.length} live website(s) that could not be safely analyzed right now.`);
+}
+assert(initialRunBody?.opportunityRunId, "An analyzable business must produce an initial opportunity run.");
 
 const beforeResponse = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
 const beforeBody = await beforeResponse.json();
