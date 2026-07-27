@@ -13,7 +13,8 @@
     "test:phase11:audit-cache": "node scripts/phase11-website-audit-cache-smoke-test.mjs",
     "test:phase11:refresh": "node scripts/phase11-manual-refresh-controls-smoke-test.mjs",
     "test:phase11:rate-limit": "node scripts/phase11-rate-limit-handling-smoke-test.mjs",
-    "test:phase11:resilience": "node scripts/phase11-background-job-resilience-smoke-test.mjs"
+    "test:phase11:resilience": "node scripts/phase11-background-job-resilience-smoke-test.mjs",
+    "test:phase11:monitoring": "node scripts/phase11-logging-monitoring-smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
