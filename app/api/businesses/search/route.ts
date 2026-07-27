@@ -11,6 +11,7 @@ import {
   storeSearchPlaceReferences,
 } from "@/lib/business-discovery/persistence";
 import type { BusinessSearchInput } from "@/lib/business-discovery/types";
+import { createRequestLogContext, logEvent } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,10 @@ function parseInput(body: SearchRequestBody): BusinessSearchInput {
 }
 
 export async function POST(request: Request) {
+  const context = createRequestLogContext(request, "business.discovery");
+  const startedAt = Date.now();
   let searchId: string | null = null;
+
   try {
     const body = (await request.json()) as SearchRequestBody;
     const input = parseInput(body);
@@ -39,11 +43,27 @@ export async function POST(request: Request) {
     const forceRefresh = body.forceRefresh === true;
     const reuseRecent = body.reuseRecent === true && !forceRefresh;
 
-    await recoverStaleSearchExecutions(BUSINESS_SEARCH_ACTIVE_WINDOW_MS);
+    logEvent("INFO", "business_search.requested", context, {
+      industry: input.industry,
+      location: input.location,
+      maxResults: input.maxResults,
+      forceRefresh,
+      reuseRecent,
+    });
+
+    const recoveredStaleCount = await recoverStaleSearchExecutions(BUSINESS_SEARCH_ACTIVE_WINDOW_MS);
+    if (recoveredStaleCount > 0) {
+      logEvent("WARN", "business_search.stale_recovered", context, { recoveredStaleCount });
+    }
 
     if (reuseRecent) {
       const cachedSearch = await findRecentCompletedSearch(input, BUSINESS_SEARCH_CACHE_TTL_MS);
       if (cachedSearch) {
+        logEvent("INFO", "business_search.cache_hit", context, {
+          searchId: cachedSearch.id,
+          returnedResults: cachedSearch.result_count ?? 0,
+          durationMs: Date.now() - startedAt,
+        });
         return NextResponse.json({
           ok: true,
           searchId: cachedSearch.id,
@@ -70,12 +90,16 @@ export async function POST(request: Request) {
             storedFields: ["search inputs", "provider", "Google Place ID", "result position"],
             googlePlaceContentPersisted: false,
           },
-        });
+        }, { headers: { "X-Request-Id": context.requestId } });
       }
     }
 
     const activeSearch = await findRecentRunningSearch(input, BUSINESS_SEARCH_ACTIVE_WINDOW_MS);
     if (activeSearch) {
+      logEvent("WARN", "business_search.duplicate_blocked", context, {
+        searchId: activeSearch.id,
+        startedAt: activeSearch.created_at,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -91,19 +115,26 @@ export async function POST(request: Request) {
             staleAfterMs: BUSINESS_SEARCH_ACTIVE_WINDOW_MS,
           },
         },
-        { status: 409 },
+        { status: 409, headers: { "X-Request-Id": context.requestId } },
       );
     }
 
     const previouslyDiscovered = await getPreviouslyDiscoveredPlaceIds();
     searchId = await createSearchExecution(input, query);
-    const result = await searchGooglePlaces(input, previouslyDiscovered);
+    logEvent("INFO", "business_search.started", context, { searchId });
 
+    const result = await searchGooglePlaces(input, previouslyDiscovered);
     await storeSearchPlaceReferences(searchId, result.results);
     await finalizeSearchExecution({
       searchId,
       status: "COMPLETED",
       resultCount: result.returnedResults,
+    });
+
+    logEvent("INFO", "business_search.completed", context, {
+      searchId,
+      returnedResults: result.returnedResults,
+      durationMs: Date.now() - startedAt,
     });
 
     return NextResponse.json({
@@ -129,7 +160,7 @@ export async function POST(request: Request) {
         storedFields: ["search inputs", "provider", "Google Place ID", "result position"],
         googlePlaceContentPersisted: false,
       },
-    });
+    }, { headers: { "X-Request-Id": context.requestId } });
   } catch (error) {
     if (searchId) {
       try {
@@ -142,18 +173,18 @@ export async function POST(request: Request) {
           errorMessage: error instanceof Error ? error.message : "Business search failed.",
         });
       } catch (finalizeError) {
-        console.error("Failed to finalize search history", finalizeError);
+        logEvent("ERROR", "business_search.finalize_failed", context, { searchId, error: finalizeError });
       }
     }
 
     if (error instanceof GooglePlacesError) {
       const rateLimited = error.status === 429 || error.status === 503;
       const retryAfterSeconds = error.retryAfterMs == null ? null : Math.max(1, Math.ceil(error.retryAfterMs / 1_000));
-      console.error("Google Places search failed", {
-        status: error.status,
-        rateLimited,
+      logEvent(rateLimited ? "WARN" : "ERROR", rateLimited ? "business_search.rate_limited" : "business_search.provider_failed", context, {
+        searchId,
+        providerStatus: error.status,
         retryAfterMs: error.retryAfterMs ?? null,
-        responseBody: error.responseBody,
+        durationMs: Date.now() - startedAt,
       });
 
       return NextResponse.json(
@@ -171,15 +202,23 @@ export async function POST(request: Request) {
         },
         {
           status: rateLimited ? 503 : 502,
-          headers: retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : undefined,
+          headers: {
+            "X-Request-Id": context.requestId,
+            ...(retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : {}),
+          },
         },
       );
     }
 
     const message = error instanceof Error ? error.message : "Invalid request.";
+    logEvent(searchId ? "ERROR" : "WARN", searchId ? "business_search.failed" : "business_search.invalid_request", context, {
+      searchId,
+      error,
+      durationMs: Date.now() - startedAt,
+    });
     return NextResponse.json(
       { ok: false, searchId, error: { code: searchId ? "SEARCH_ERROR" : "VALIDATION_ERROR", message } },
-      { status: searchId ? 500 : 400 },
+      { status: searchId ? 500 : 400, headers: { "X-Request-Id": context.requestId } },
     );
   }
 }
