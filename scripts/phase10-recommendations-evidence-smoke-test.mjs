@@ -13,7 +13,7 @@ assert(candidate?.externalId && candidate?.websiteUrl, "A discovered business wi
 const runResponse = await fetch(`${TARGET}/api/websites/opportunities`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: candidate.websiteUrl }),
+  body: JSON.stringify({ url: candidate.websiteUrl, forceRefresh: true }),
 });
 const runBody = await runResponse.json();
 assert(runResponse.ok && runBody.ok === true, `Fresh opportunity run failed: ${JSON.stringify(runBody)}`);
