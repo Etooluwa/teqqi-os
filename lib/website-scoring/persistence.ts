@@ -2,6 +2,8 @@ import "server-only";
 
 import { supabaseRest } from "@/lib/supabase/server";
 import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
+import { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
+import { SCORING_MODEL_VERSION } from "./config";
 import type {
   CategoryScoreResult,
   UnifiedWebsiteScoringResult,
@@ -16,7 +18,7 @@ type PersistScoringRunInput = {
   scoring: UnifiedWebsiteScoringResult;
 };
 
-type ScoringRunRow = {
+export type ScoringRunRow = {
   id: string;
   website_id: string | null;
   audit_id: string | null;
@@ -164,4 +166,34 @@ export async function getWebsiteScoringRun(scoringRunId: string) {
   );
 
   return { run, categories };
+}
+
+export async function getRecoverableWebsiteScoringRun(
+  scoringRunId: string,
+  requestedUrl: string,
+  maxAgeMs: number,
+): Promise<ScoringRunRow | null> {
+  if (!scoringRunId.trim() || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return null;
+
+  const persisted = await getWebsiteScoringRun(scoringRunId);
+  const run = persisted?.run;
+  if (!run || run.status !== "COMPLETED") return null;
+
+  let requestedDomain: string;
+  let runDomain: string;
+  try {
+    requestedDomain = canonicalDomain(requestedUrl);
+    runDomain = canonicalDomain(run.final_url);
+  } catch {
+    return null;
+  }
+
+  const createdAt = Date.parse(run.created_at);
+  const freshEnough = Number.isFinite(createdAt) && createdAt >= Date.now() - maxAgeMs;
+  const compatible = run.analyzer_version === WEBSITE_ANALYZER_VERSION
+    && run.scoring_model_version === SCORING_MODEL_VERSION
+    && run.explanation?.scoringModelVersion === SCORING_MODEL_VERSION;
+  const hasFindings = Array.isArray(run.analyzer_findings) && run.analyzer_findings.length > 0;
+
+  return requestedDomain === runDomain && freshEnough && compatible && hasFindings ? run : null;
 }
