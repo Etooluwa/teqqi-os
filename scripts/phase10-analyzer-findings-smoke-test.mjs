@@ -1,3 +1,5 @@
+import { selectAnalyzableBusiness } from "./helpers/select-analyzable-business.mjs";
+
 const TARGET = process.env.TEQQI_APP_URL ?? "http://localhost:3000";
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -8,18 +10,14 @@ const dashboardResponse = await fetch(`${TARGET}/api/dashboard`);
 const dashboardBody = await dashboardResponse.json();
 assert(dashboardResponse.ok && dashboardBody.ok === true, `Dashboard API failed: ${JSON.stringify(dashboardBody)}`);
 
-const candidate = dashboardBody.dashboard.rankedBusinesses.find((row) => row.websiteUrl);
-assert(candidate?.externalId && candidate?.websiteUrl, "A discovered business with a website is required for the Phase 10 analyzer findings test.");
-
-// Create a fresh immutable scoring/opportunity run so the persisted Phase 6 findings
-// are guaranteed to exist even when older Phase 7 runs predate Phase 10 finding persistence.
-const analyzeResponse = await fetch(`${TARGET}/api/websites/opportunities`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: candidate.websiteUrl, forceRefresh: true }),
-});
-const analyzeBody = await analyzeResponse.json();
-assert(analyzeResponse.ok && analyzeBody.ok === true, `Fresh website intelligence run failed: ${JSON.stringify(analyzeBody)}`);
+const { candidate, body: analyzeBody, skipped } = await selectAnalyzableBusiness(
+  TARGET,
+  dashboardBody.dashboard.rankedBusinesses,
+);
+if (skipped.length > 0) {
+  console.log(`↪ Skipped ${skipped.length} live website(s) that could not be safely analyzed right now.`);
+}
+assert(analyzeBody?.ok === true, `Fresh website intelligence run failed: ${JSON.stringify(analyzeBody)}`);
 
 const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
 const body = await response.json();
