@@ -81,7 +81,10 @@ console.log("✓ Server-rendered business page exposes score, findings, recommen
 const missingPageResponse = await fetch(`${TARGET}/businesses/not-a-real-teqqi-place-id`, { redirect: "manual" });
 const missingPageHtml = await missingPageResponse.text();
 assert(missingPageResponse.status === 404, `Unknown business page must return 404; received ${missingPageResponse.status}.`);
-assert(missingPageHtml.includes("Business not found"), "Unknown business page must render the controlled Phase 10 not-found state.");
+assert(
+  missingPageHtml.includes("Business unavailable") && missingPageHtml.includes("We couldn’t load this business."),
+  "Unknown business page must render the controlled Phase 10 not-found state.",
+);
 console.log("✓ Unknown business pages return the controlled Phase 10 not-found experience");
 
 const refreshSource = await readFile(new URL("../app/businesses/[externalId]/refresh-analysis-button.tsx", import.meta.url), "utf8");
@@ -93,7 +96,10 @@ assert(refreshSource.includes("role=\"alert\""), "Refresh failures must be annou
 const errorSource = await readFile(new URL("../app/businesses/[externalId]/error.tsx", import.meta.url), "utf8");
 const notFoundSource = await readFile(new URL("../app/businesses/[externalId]/not-found.tsx", import.meta.url), "utf8");
 assert(errorSource.includes("Try again") && errorSource.includes("Back to dashboard"), "Page error state must offer recovery actions.");
-assert(notFoundSource.includes("Business not found") && notFoundSource.includes("Back to dashboard"), "Not-found state must explain the problem and offer dashboard navigation.");
+assert(
+  notFoundSource.includes("Business unavailable") && notFoundSource.includes("Back to dashboard"),
+  "Not-found state must explain the problem and offer dashboard navigation.",
+);
 console.log("✓ Refresh, responsive, accessibility, error, and recovery states are present in the Phase 10 UI");
 
 assert(afterBody.detail.leadScore.available === false && afterBody.detail.leadScore.score === null, "Phase 10 final gate must not fabricate commercial Lead Score.");
