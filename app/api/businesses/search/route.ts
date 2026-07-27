@@ -13,7 +13,7 @@ import type { BusinessSearchInput } from "@/lib/business-discovery/types";
 export const runtime = "nodejs";
 
 const BUSINESS_SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
-type SearchRequestBody = Partial<BusinessSearchInput> & { reuseRecent?: boolean };
+type SearchRequestBody = Partial<BusinessSearchInput> & { reuseRecent?: boolean; forceRefresh?: boolean };
 
 function parseInput(body: SearchRequestBody): BusinessSearchInput {
   const industry = typeof body.industry === "string" ? body.industry.trim() : "";
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as SearchRequestBody;
     const input = parseInput(body);
     const query = `${input.industry} in ${input.location}`;
-    const reuseRecent = body.reuseRecent === true;
+    const forceRefresh = body.forceRefresh === true;
+    const reuseRecent = body.reuseRecent === true && !forceRefresh;
 
     if (reuseRecent) {
       const cachedSearch = await findRecentCompletedSearch(input, BUSINESS_SEARCH_CACHE_TTL_MS);
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
             ttlMs: BUSINESS_SEARCH_CACHE_TTL_MS,
             cachedSearchId: cachedSearch.id,
             cachedAt: cachedSearch.created_at,
+            forceRefresh: false,
           },
           persistence: {
             stored: true,
@@ -91,7 +93,8 @@ export async function POST(request: Request) {
       },
       cache: {
         hit: false,
-        eligible: reuseRecent,
+        eligible: body.reuseRecent === true,
+        forceRefresh,
         ttlMs: BUSINESS_SEARCH_CACHE_TTL_MS,
       },
       persistence: {
