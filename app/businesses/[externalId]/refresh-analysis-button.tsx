@@ -29,7 +29,7 @@ export function RefreshAnalysisButton({ websiteUrl }: RefreshAnalysisButtonProps
       const response = await fetch("/api/websites/opportunities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: websiteUrl }),
+        body: JSON.stringify({ url: websiteUrl, forceRefresh: true }),
       });
 
       const result = (await response.json().catch(() => null)) as OpportunityRefreshResponse | null;
