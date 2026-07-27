@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8fb;
-  --foreground: #0f172a;
+  --background: #f4f2ed;
+  --foreground: #171714;
+  --paper: #f8f7f3;
+  --line: #d9d6cf;
+  --muted: #77766f;
+  --accent: #2f493d;
 }
 
 @theme inline {
@@ -31,4 +35,29 @@ button,
 input,
 select {
   font: inherit;
+}
+
+::selection {
+  background: #d8e0d9;
+  color: #171714;
+}
+
+.font-editorial {
+  font-family: Georgia, "Times New Roman", Times, serif;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+
+.teqqi-control {
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.teqqi-control:focus {
+  border-color: #77766f;
+  background: #fff;
 }
