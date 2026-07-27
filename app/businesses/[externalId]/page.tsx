@@ -9,6 +9,17 @@ function label(value: string) {
   return value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
+function formatAuditDate(value: string | null) {
+  if (!value) return "Unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unavailable";
+  return new Intl.DateTimeFormat("en-CA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Toronto",
+  }).format(date);
+}
+
 function scoreTone(value: number | null) {
   if (value === null) return "text-slate-400";
   if (value < 40) return "text-rose-600";
@@ -46,6 +57,9 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
   const breakdown = detail.intelligence.scoreBreakdown;
   const findings = detail.intelligence.analyzerFindings;
   const recommendations = detail.intelligence.recommendations;
+  const scoringRun = detail.intelligence.scoringRun;
+  const opportunityRun = detail.intelligence.opportunityRun;
+  const latestAuditAt = opportunityRun?.createdAt ?? scoringRun?.createdAt ?? null;
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
@@ -84,6 +98,39 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Discovery</p><p className="mt-3 font-semibold">{detail.discovery ? `${detail.discovery.industry} in ${detail.discovery.location}` : "Unavailable"}</p><p className="mt-1 text-sm text-slate-500">Google business details are refreshed live.</p></div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Analyzer evidence</p><p className="mt-3 text-2xl font-bold">{findings.available ? findings.findingCount : "—"}</p><p className="mt-1 text-sm text-slate-500">{findings.available ? "Persisted findings tied to the scoring run" : "No persisted analyzer findings"}</p></div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommendations</p><p className="mt-3 text-2xl font-bold">{recommendations.available ? recommendations.opportunityCount : 0}</p><p className="mt-1 text-sm text-slate-500">Website-only opportunities; Lead Score remains unavailable.</p></div>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div>
+              <h2 className="text-lg font-semibold">Audit metadata</h2>
+              <p className="mt-1 text-sm text-slate-500">Exact persisted runs behind the intelligence shown on this page.</p>
+            </div>
+            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Last analyzed {formatAuditDate(latestAuditAt)}</span>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Analyzer</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{scoringRun?.analyzerVersion ?? "Unavailable"}</p>
+              <p className="mt-1 text-xs text-slate-500">{formatAuditDate(scoringRun?.createdAt ?? null)}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Scoring model</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{scoringRun?.scoringModelVersion ?? "Unavailable"}</p>
+              <p className="mt-1 break-all text-xs text-slate-500">Run {scoringRun?.scoringRunId ?? "Unavailable"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opportunity engine</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{opportunityRun?.opportunityEngineVersion ?? "Unavailable"}</p>
+              <p className="mt-1 text-xs text-slate-500">{formatAuditDate(opportunityRun?.createdAt ?? null)}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opportunity run</p>
+              <p className="mt-2 break-all text-sm font-semibold text-slate-800">{opportunityRun?.opportunityRunId ?? "Unavailable"}</p>
+              <p className="mt-1 text-xs text-slate-500">{opportunityRun ? "Tied to exact scoring run" : "No completed opportunity run"}</p>
+            </div>
+          </div>
         </section>
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
