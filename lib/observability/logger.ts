@@ -31,6 +31,13 @@ function safeValue(value: unknown): unknown {
   return value;
 }
 
+function safeMetadata(metadata: LogMetadata): LogMetadata {
+  const sanitized = safeValue(metadata);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+    ? sanitized as LogMetadata
+    : {};
+}
+
 function normalizeRequestId(value: string | null): string {
   const trimmed = value?.trim();
   return trimmed && REQUEST_ID_PATTERN.test(trimmed) ? trimmed : randomUUID();
@@ -60,7 +67,7 @@ export function logEvent(
     event,
     requestId: context.requestId,
     operation: context.operation,
-    ...safeValue(metadata) as Record<string, unknown>,
+    ...safeMetadata(metadata),
   });
 
   if (level === "ERROR") console.error(record);
