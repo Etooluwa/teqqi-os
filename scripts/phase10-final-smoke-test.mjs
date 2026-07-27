@@ -46,11 +46,12 @@ const beforeOpportunityRunId = beforeBody.detail.intelligence.opportunityRun?.op
 const refreshResponse = await fetch(`${TARGET}/api/websites/opportunities`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: candidate.websiteUrl }),
+  body: JSON.stringify({ url: candidate.websiteUrl, forceRefresh: true }),
 });
 const refreshBody = await refreshResponse.json();
 assert(refreshResponse.ok && refreshBody.ok === true, `Refresh pipeline failed: ${JSON.stringify(refreshBody)}`);
 assert(refreshBody.scoringRunId && refreshBody.opportunityRunId, "Refresh must create persisted scoring and opportunity runs.");
+assert(refreshBody.cache?.hit === false && refreshBody.cache?.forceRefresh === true, "Manual refresh must bypass the Phase 11 audit cache.");
 
 const afterResponse = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
 const afterBody = await afterResponse.json();
@@ -90,6 +91,7 @@ console.log("✓ Unknown business pages return the controlled Phase 10 not-found
 const refreshSource = await readFile(new URL("../app/businesses/[externalId]/refresh-analysis-button.tsx", import.meta.url), "utf8");
 assert(refreshSource.includes("disabled={!websiteUrl || isRefreshing}"), "Refresh control must disable itself without a website or while running.");
 assert(refreshSource.includes("aria-busy={isRefreshing}"), "Refresh control must expose its busy state accessibly.");
+assert(refreshSource.includes("forceRefresh: true"), "Manual refresh must explicitly bypass the Phase 11 website audit cache.");
 assert(refreshSource.includes("w-full") && refreshSource.includes("sm:w-auto"), "Refresh control must support narrow and wider layouts.");
 assert(refreshSource.includes("role=\"alert\""), "Refresh failures must be announced through an alert state.");
 
