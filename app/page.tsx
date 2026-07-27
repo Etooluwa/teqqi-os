@@ -34,6 +34,16 @@ type Dashboard = {
 };
 type DashboardResponse = { ok: true; dashboard: Dashboard } | { ok: false; error: { code: string; message: string } };
 type DiscoveryResponse = { ok: true; searchId: string } | { ok: false; error?: { message?: string } };
+type AutoAnalysisProgress = {
+  marketId: string;
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  running: boolean;
+};
+
+const AUTO_ANALYSIS_CONCURRENCY = 3;
 
 const priorityClasses: Record<Priority, string> = {
   CRITICAL: "border-rose-200 bg-rose-50 text-rose-700",
@@ -66,6 +76,7 @@ export default function Home() {
   const [location, setLocation] = useState("");
   const [maxResults, setMaxResults] = useState(20);
   const [discovering, setDiscovering] = useState(false);
+  const [autoAnalysis, setAutoAnalysis] = useState<AutoAnalysisProgress | null>(null);
   const [priority, setPriority] = useState("");
   const [confidence, setConfidence] = useState("");
   const [analysis, setAnalysis] = useState("ALL");
@@ -74,7 +85,7 @@ export default function Home() {
   const [maxScore, setMaxScore] = useState("");
   const [service, setService] = useState("");
 
-  const loadDashboard = useCallback(async (searchId?: string) => {
+  const loadDashboard = useCallback(async (searchId?: string): Promise<Dashboard | null> => {
     setLoading(true);
     setError(null);
     try {
@@ -91,12 +102,54 @@ export default function Home() {
       const body = (await response.json()) as DashboardResponse;
       if (!response.ok || !body.ok) throw new Error(!body.ok ? body.error.message : "Dashboard request failed.");
       setDashboard(body.dashboard);
+      return body.dashboard;
     } catch (err) {
       setError(err instanceof Error ? err.message : "The dashboard could not be loaded.");
+      return null;
     } finally {
       setLoading(false);
     }
   }, [priority, confidence, service, analysis, sort, minScore, maxScore]);
+
+  const runAutomaticAnalysis = useCallback(async (market: Dashboard) => {
+    const candidates = market.tableView.rows.filter((row) => row.websiteUrl && !row.intelligenceAvailable);
+    if (candidates.length === 0) {
+      setAutoAnalysis(null);
+      return;
+    }
+
+    setAutoAnalysis({ marketId: market.market.id, total: candidates.length, completed: 0, succeeded: 0, failed: 0, running: true });
+    let nextIndex = 0;
+
+    async function worker() {
+      while (nextIndex < candidates.length) {
+        const candidate = candidates[nextIndex++];
+        let succeeded = false;
+        try {
+          const response = await fetch("/api/websites/opportunities", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: candidate.websiteUrl }),
+          });
+          const body = await response.json().catch(() => null) as { ok?: boolean } | null;
+          succeeded = response.ok && body?.ok === true;
+        } catch {
+          succeeded = false;
+        }
+
+        setAutoAnalysis((current) => current && current.marketId === market.market.id ? {
+          ...current,
+          completed: current.completed + 1,
+          succeeded: current.succeeded + (succeeded ? 1 : 0),
+          failed: current.failed + (succeeded ? 0 : 1),
+        } : current);
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(AUTO_ANALYSIS_CONCURRENCY, candidates.length) }, () => worker()));
+    setAutoAnalysis((current) => current && current.marketId === market.market.id ? { ...current, running: false } : current);
+    await loadDashboard(market.market.id);
+  }, [loadDashboard]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadDashboard(); }, 0);
@@ -107,6 +160,7 @@ export default function Home() {
 
   async function switchMarket(searchId: string) {
     setService("");
+    setAutoAnalysis(null);
     await loadDashboard(searchId);
   }
 
@@ -114,6 +168,7 @@ export default function Home() {
     event.preventDefault();
     setDiscovering(true);
     setError(null);
+    setAutoAnalysis(null);
     try {
       const response = await fetch("/api/businesses/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ industry, location, maxResults, reuseRecent: true }) });
       const body = (await response.json()) as DiscoveryResponse;
@@ -121,7 +176,8 @@ export default function Home() {
       setShowDiscovery(false);
       setIndustry("");
       setLocation("");
-      await loadDashboard(body.searchId);
+      const discoveredMarket = await loadDashboard(body.searchId);
+      if (discoveredMarket) void runAutomaticAnalysis(discoveredMarket);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Business discovery failed.");
     } finally {
@@ -141,9 +197,11 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        {showDiscovery && <section className="mb-6 rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm"><div className="mb-4"><p className="font-semibold">Discover a new market</p><p className="mt-1 text-sm text-slate-500">Recent identical searches may be reused for 15 minutes; otherwise discovery returns previously unseen Google Place IDs.</p></div><form onSubmit={runDiscovery} className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]"><input value={industry} onChange={(e) => setIndustry(e.target.value)} required placeholder="Industry, e.g. Dentists" className="h-11 rounded-xl border border-slate-300 px-3.5 text-sm" /><input value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Location, e.g. Ottawa" className="h-11 rounded-xl border border-slate-300 px-3.5 text-sm" /><select value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value))} className="h-11 rounded-xl border border-slate-300 px-3 text-sm">{[5,10,20,40,60].map((value) => <option key={value} value={value}>{value} results</option>)}</select><button disabled={discovering} className="h-11 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{discovering ? "Searching…" : "Search market"}</button></form></section>}
+        {showDiscovery && <section className="mb-6 rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm"><div className="mb-4"><p className="font-semibold">Discover a new market</p><p className="mt-1 text-sm text-slate-500">Search results with websites are automatically analyzed, scored, and evaluated for opportunities after discovery.</p></div><form onSubmit={runDiscovery} className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]"><input value={industry} onChange={(e) => setIndustry(e.target.value)} required placeholder="Industry, e.g. Dentists" className="h-11 rounded-xl border border-slate-300 px-3.5 text-sm" /><input value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Location, e.g. Ottawa" className="h-11 rounded-xl border border-slate-300 px-3.5 text-sm" /><select value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value))} className="h-11 rounded-xl border border-slate-300 px-3 text-sm">{[5,10,20,40,60].map((value) => <option key={value} value={value}>{value} results</option>)}</select><button disabled={discovering} className="h-11 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{discovering ? "Searching…" : "Search market"}</button></form></section>}
 
         {error && <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button onClick={() => void loadDashboard(dashboard?.market.id)} className="font-semibold underline">Retry</button></div>}
+
+        {autoAnalysis && dashboard?.market.id === autoAnalysis.marketId && <section className={`mb-6 rounded-2xl border px-5 py-4 shadow-sm ${autoAnalysis.running ? "border-indigo-200 bg-indigo-50" : autoAnalysis.failed > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{autoAnalysis.running ? "Analyzing discovered websites…" : "Automatic market analysis complete"}</p><p className="mt-1 text-sm text-slate-600">{autoAnalysis.completed} of {autoAnalysis.total} eligible websites processed · {autoAnalysis.succeeded} succeeded{autoAnalysis.failed > 0 ? ` · ${autoAnalysis.failed} could not be analyzed` : ""}</p></div><span className="text-sm font-bold tabular-nums text-slate-700">{Math.round((autoAnalysis.completed / autoAnalysis.total) * 100)}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/80"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${(autoAnalysis.completed / autoAnalysis.total) * 100}%` }} /></div></section>}
 
         {loading && !dashboard ? <section className="rounded-2xl border border-slate-200 bg-white p-16 text-center shadow-sm"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950" /><p className="font-semibold">Preparing opportunity intelligence…</p><p className="mt-1 text-sm text-slate-500">Refreshing live business details and connecting website intelligence.</p></section> : dashboard ? <>
           <section className="mb-6 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">Phase 9 · Opportunity Dashboard</span><span className="text-xs text-slate-400">Dashboard v{dashboard.dashboardVersion}</span></div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{dashboard.market.industry} in {dashboard.market.location}</h1><p className="mt-2 text-sm text-slate-500">Discovered {formatDate(dashboard.market.createdAt)} · Business details refreshed live from Google</p></div><div className="flex flex-col gap-3 sm:flex-row sm:items-start"><select value={dashboard.market.id} onChange={(e) => void switchMarket(e.target.value)} className="h-11 max-w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium shadow-sm lg:min-w-[320px]">{dashboard.historyNavigation.map((entry) => <option key={entry.id} value={entry.id}>{entry.industry} · {entry.location} · {formatDate(entry.createdAt)}</option>)}</select><MarketRefreshButton searchId={dashboard.market.id} /></div></section>
@@ -159,7 +217,7 @@ export default function Home() {
           </section>
 
           <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500"><strong className="text-slate-700">Data note:</strong> Google Places business content is refreshed live and is not persisted by the dashboard. Website Scores and opportunities come from immutable TEQQI analysis runs. Commercial Lead Score is intentionally unavailable until a business-level lead model is implemented.</div>
-        </> : <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center"><p className="text-xl font-semibold">No market intelligence yet</p><p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">Run Business Discovery to create your first market, then TEQQI OS can organize its website intelligence here.</p><button onClick={() => setShowDiscovery(true)} className="mt-5 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white">Find businesses</button></section>}
+        </> : <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center"><p className="text-xl font-semibold">No market intelligence yet</p><p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">Run Business Discovery to create your first market, then TEQQI OS will automatically analyze eligible websites and organize the resulting opportunity intelligence here.</p><button onClick={() => setShowDiscovery(true)} className="mt-5 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white">Find businesses</button></section>}
       </div>
     </main>
   );
