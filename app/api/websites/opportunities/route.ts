@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { createRequestLogContext, logEvent } from "@/lib/observability/logger";
 import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { prepareWebsiteAnalysis } from "@/lib/website-analyzer/service";
 import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
@@ -69,18 +70,28 @@ function generateFromPersistedScoring(findings: AnalyzerFinding[], scoring: Unif
 }
 
 export async function POST(request: Request) {
+  const context = createRequestLogContext(request, "website.audit");
+  const startedAt = Date.now();
   let body: Partial<OpportunityRequest>;
   let recoveryScoringRunId: string | null = null;
 
   try {
     body = (await request.json()) as Partial<OpportunityRequest>;
   } catch {
+    logEvent("WARN", "website_audit.invalid_json", context);
     return invalidRequest("Request body must be valid JSON.");
   }
 
   if (typeof body.url !== "string" || body.url.trim() === "") {
+    logEvent("WARN", "website_audit.invalid_request", context, { reason: "missing_url" });
     return invalidRequest("A website URL is required.");
   }
+
+  logEvent("INFO", "website_audit.requested", context, {
+    url: body.url,
+    forceRefresh: body.forceRefresh === true,
+    resumeRequested: typeof body.resumeScoringRunId === "string" && Boolean(body.resumeScoringRunId.trim()),
+  });
 
   try {
     if (typeof body.resumeScoringRunId === "string" && body.resumeScoringRunId.trim()) {
@@ -90,6 +101,10 @@ export async function POST(request: Request) {
         WEBSITE_AUDIT_RECOVERY_TTL_MS,
       );
       if (!checkpoint || !checkpoint.analyzer_findings) {
+        logEvent("WARN", "website_audit.checkpoint_rejected", context, {
+          scoringRunId: body.resumeScoringRunId,
+          durationMs: Date.now() - startedAt,
+        });
         return NextResponse.json(
           {
             ok: false,
@@ -99,13 +114,19 @@ export async function POST(request: Request) {
               retryable: false,
             },
           },
-          { status: 409 },
+          { status: 409, headers: { "X-Request-Id": context.requestId } },
         );
       }
 
       recoveryScoringRunId = checkpoint.id;
+      logEvent("INFO", "website_audit.resume_started", context, { scoringRunId: checkpoint.id });
       const existingOpportunityRun = await findCompletedOpportunityRunForScoringRun(checkpoint.id);
       if (existingOpportunityRun) {
+        logEvent("INFO", "website_audit.resume_idempotent_hit", context, {
+          scoringRunId: checkpoint.id,
+          opportunityRunId: existingOpportunityRun.id,
+          durationMs: Date.now() - startedAt,
+        });
         return NextResponse.json({
           ok: true,
           opportunityRunId: existingOpportunityRun.id,
@@ -136,7 +157,7 @@ export async function POST(request: Request) {
             ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
             forceRefresh: body.forceRefresh === true,
           },
-        });
+        }, { headers: { "X-Request-Id": context.requestId } });
       }
 
       const opportunityResult = generateFromPersistedScoring(
@@ -152,6 +173,12 @@ export async function POST(request: Request) {
         result: opportunityResult,
       });
 
+      logEvent("INFO", "website_audit.resume_completed", context, {
+        scoringRunId: checkpoint.id,
+        opportunityRunId: opportunityPersistence.opportunityRunId,
+        opportunityCount: opportunityResult.opportunityCount,
+        durationMs: Date.now() - startedAt,
+      });
       return NextResponse.json({
         ok: true,
         opportunityRunId: opportunityPersistence.opportunityRunId,
@@ -182,7 +209,7 @@ export async function POST(request: Request) {
           ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
           forceRefresh: body.forceRefresh === true,
         },
-      });
+      }, { headers: { "X-Request-Id": context.requestId } });
     }
 
     if (body.forceRefresh !== true) {
@@ -195,6 +222,11 @@ export async function POST(request: Request) {
         const cachedScoringRun = await getWebsiteScoringRun(cachedOpportunityRun.scoring_run_id);
         if (cachedScoringRun) {
           const scoring = cachedScoringRun.run.explanation;
+          logEvent("INFO", "website_audit.cache_hit", context, {
+            scoringRunId: cachedOpportunityRun.scoring_run_id,
+            opportunityRunId: cachedOpportunityRun.id,
+            durationMs: Date.now() - startedAt,
+          });
           return NextResponse.json({
             ok: true,
             opportunityRunId: cachedOpportunityRun.id,
@@ -219,11 +251,12 @@ export async function POST(request: Request) {
               createdAt: cachedOpportunityRun.created_at,
               versionCompatible: true,
             },
-          });
+          }, { headers: { "X-Request-Id": context.requestId } });
         }
       }
     }
 
+    logEvent("INFO", "website_audit.analysis_started", context, { url: body.url });
     const analysis = await prepareWebsiteAnalysis(body.url);
     const allFindings = [
       ...analysis.technicalHealthFindings,
@@ -252,9 +285,13 @@ export async function POST(request: Request) {
       scoring,
     });
     recoveryScoringRunId = scoringPersistence.scoringRunId;
+    logEvent("INFO", "website_audit.scoring_persisted", context, {
+      scoringRunId: scoringPersistence.scoringRunId,
+      findingCount: allFindings.length,
+      websiteScore: scoring.websiteScore,
+    });
 
     const opportunityResult = generateFromPersistedScoring(allFindings, scoring);
-
     const opportunityPersistence = await persistWebsiteOpportunityRun({
       scoringRunId: scoringPersistence.scoringRunId,
       websiteId: scoringPersistence.websiteId,
@@ -264,6 +301,12 @@ export async function POST(request: Request) {
       result: opportunityResult,
     });
 
+    logEvent("INFO", "website_audit.completed", context, {
+      scoringRunId: scoringPersistence.scoringRunId,
+      opportunityRunId: opportunityPersistence.opportunityRunId,
+      opportunityCount: opportunityResult.opportunityCount,
+      durationMs: Date.now() - startedAt,
+    });
     return NextResponse.json({
       ok: true,
       opportunityRunId: opportunityPersistence.opportunityRunId,
@@ -292,7 +335,7 @@ export async function POST(request: Request) {
         ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
         forceRefresh: body.forceRefresh === true,
       },
-    });
+    }, { headers: { "X-Request-Id": context.requestId } });
   } catch (error) {
     const recovery = recoveryScoringRunId
       ? {
@@ -303,27 +346,42 @@ export async function POST(request: Request) {
       : undefined;
 
     if (error instanceof WebsiteAnalyzerError) {
+      logEvent(error.httpStatus >= 500 ? "ERROR" : "WARN", "website_audit.analyzer_failed", context, {
+        code: error.code,
+        httpStatus: error.httpStatus,
+        durationMs: Date.now() - startedAt,
+      });
       return NextResponse.json(
         { ok: false, error: { code: error.code, message: error.message } },
-        { status: error.httpStatus },
+        { status: error.httpStatus, headers: { "X-Request-Id": context.requestId } },
       );
     }
 
     if (error instanceof WebsiteScoringError) {
+      logEvent("ERROR", "website_audit.scoring_failed", context, { error, durationMs: Date.now() - startedAt });
       return NextResponse.json(
         { ok: false, error: { code: "SCORING_ERROR", message: error.message } },
-        { status: 422 },
+        { status: 422, headers: { "X-Request-Id": context.requestId } },
       );
     }
 
     if (error instanceof WebsiteOpportunityError) {
+      logEvent("ERROR", "website_audit.opportunity_failed", context, {
+        error,
+        recoveryScoringRunId,
+        durationMs: Date.now() - startedAt,
+      });
       return NextResponse.json(
         { ok: false, error: { code: "OPPORTUNITY_ERROR", message: error.message }, recovery },
-        { status: 422 },
+        { status: 422, headers: { "X-Request-Id": context.requestId } },
       );
     }
 
-    console.error("Website opportunity request failed", error);
+    logEvent("ERROR", recovery ? "website_audit.partial_failure" : "website_audit.failed", context, {
+      error,
+      recoveryScoringRunId,
+      durationMs: Date.now() - startedAt,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -335,7 +393,7 @@ export async function POST(request: Request) {
         },
         recovery,
       },
-      { status: recovery ? 503 : 500 },
+      { status: recovery ? 503 : 500, headers: { "X-Request-Id": context.requestId } },
     );
   }
 }
