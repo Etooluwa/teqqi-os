@@ -5,7 +5,9 @@ import {
   createSearchExecution,
   finalizeSearchExecution,
   findRecentCompletedSearch,
+  findRecentRunningSearch,
   getPreviouslyDiscoveredPlaceIds,
+  recoverStaleSearchExecutions,
   storeSearchPlaceReferences,
 } from "@/lib/business-discovery/persistence";
 import type { BusinessSearchInput } from "@/lib/business-discovery/types";
@@ -13,6 +15,7 @@ import type { BusinessSearchInput } from "@/lib/business-discovery/types";
 export const runtime = "nodejs";
 
 const BUSINESS_SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
+const BUSINESS_SEARCH_ACTIVE_WINDOW_MS = 10 * 60 * 1000;
 type SearchRequestBody = Partial<BusinessSearchInput> & { reuseRecent?: boolean; forceRefresh?: boolean };
 
 function parseInput(body: SearchRequestBody): BusinessSearchInput {
@@ -35,6 +38,8 @@ export async function POST(request: Request) {
     const query = `${input.industry} in ${input.location}`;
     const forceRefresh = body.forceRefresh === true;
     const reuseRecent = body.reuseRecent === true && !forceRefresh;
+
+    await recoverStaleSearchExecutions(BUSINESS_SEARCH_ACTIVE_WINDOW_MS);
 
     if (reuseRecent) {
       const cachedSearch = await findRecentCompletedSearch(input, BUSINESS_SEARCH_CACHE_TTL_MS);
@@ -67,6 +72,27 @@ export async function POST(request: Request) {
           },
         });
       }
+    }
+
+    const activeSearch = await findRecentRunningSearch(input, BUSINESS_SEARCH_ACTIVE_WINDOW_MS);
+    if (activeSearch) {
+      return NextResponse.json(
+        {
+          ok: false,
+          searchId: activeSearch.id,
+          error: {
+            code: "SEARCH_ALREADY_RUNNING",
+            message: "An identical business discovery search is already running. Try again after it finishes.",
+            retryable: true,
+          },
+          recovery: {
+            activeSearchId: activeSearch.id,
+            startedAt: activeSearch.created_at,
+            staleAfterMs: BUSINESS_SEARCH_ACTIVE_WINDOW_MS,
+          },
+        },
+        { status: 409 },
+      );
     }
 
     const previouslyDiscovered = await getPreviouslyDiscoveredPlaceIds();
