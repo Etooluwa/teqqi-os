@@ -1,6 +1,11 @@
 import "server-only";
 
 import { getGooglePlacesEnv } from "@/lib/env/server";
+import {
+  isRetryableProviderStatus,
+  retryDelayMs,
+  waitForRetry,
+} from "@/lib/reliability/rate-limit";
 import type {
   BusinessSearchInput,
   BusinessSearchProviderResponse,
@@ -23,6 +28,7 @@ const DETAILS_FIELD_MASK = [
 
 const GOOGLE_MAX_RESULTS = 60;
 const GOOGLE_MAX_PAGE_SIZE = 20;
+const GOOGLE_RATE_LIMIT_POLICY = { maxRetries: 2, baseDelayMs: 500, maxDelayMs: 5_000 } as const;
 
 type GooglePlace = {
   id?: string;
@@ -38,7 +44,12 @@ type GooglePlace = {
 type GoogleTextSearchResponse = { places?: GooglePlace[]; nextPageToken?: string };
 
 export class GooglePlacesError extends Error {
-  constructor(message: string, public readonly status: number, public readonly responseBody?: string) {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly responseBody?: string,
+    public readonly retryAfterMs?: number | null,
+  ) {
     super(message);
     this.name = "GooglePlacesError";
   }
@@ -77,40 +88,70 @@ function toProviderResult(place: GooglePlace, resultPosition: number): ProviderB
   };
 }
 
+async function fetchGoogleResponse(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  for (let retryIndex = 0; ; retryIndex += 1) {
+    const response = await fetch(url, init);
+    if (response.ok) return response;
+
+    const retryable = isRetryableProviderStatus(response.status);
+    const retryAfterHeader = response.headers.get("retry-after");
+    if (retryable && retryIndex < GOOGLE_RATE_LIMIT_POLICY.maxRetries) {
+      await response.body?.cancel().catch(() => undefined);
+      await waitForRetry(retryDelayMs(retryIndex, retryAfterHeader, GOOGLE_RATE_LIMIT_POLICY));
+      continue;
+    }
+
+    const responseBody = await response.text();
+    const retryAfter = retryable
+      ? retryDelayMs(retryIndex, retryAfterHeader, GOOGLE_RATE_LIMIT_POLICY)
+      : null;
+    throw new GooglePlacesError(
+      `${label} failed with status ${response.status}.`,
+      response.status,
+      responseBody,
+      retryAfter,
+    );
+  }
+}
+
 async function fetchSearchPage(params: { query: string; pageSize: number; pageToken?: string }): Promise<GoogleTextSearchResponse> {
   const { googlePlacesApiKey } = getGooglePlacesEnv();
-  const response = await fetch(GOOGLE_TEXT_SEARCH_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": googlePlacesApiKey,
-      "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+  const response = await fetchGoogleResponse(
+    GOOGLE_TEXT_SEARCH_URL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": googlePlacesApiKey,
+        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+      },
+      body: JSON.stringify({
+        textQuery: params.query,
+        pageSize: params.pageSize,
+        ...(params.pageToken ? { pageToken: params.pageToken } : {}),
+      }),
+      cache: "no-store",
     },
-    body: JSON.stringify({
-      textQuery: params.query,
-      pageSize: params.pageSize,
-      ...(params.pageToken ? { pageToken: params.pageToken } : {}),
-    }),
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const responseBody = await response.text();
-    throw new GooglePlacesError(`Google Places request failed with status ${response.status}.`, response.status, responseBody);
-  }
+    "Google Places request",
+  );
   return (await response.json()) as GoogleTextSearchResponse;
 }
 
 export async function getGooglePlaceDetails(placeId: string, resultPosition: number): Promise<ProviderBusinessResult> {
   const { googlePlacesApiKey } = getGooglePlacesEnv();
-  const response = await fetch(`${GOOGLE_PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`, {
-    method: "GET",
-    headers: { "X-Goog-Api-Key": googlePlacesApiKey, "X-Goog-FieldMask": DETAILS_FIELD_MASK },
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const responseBody = await response.text();
-    throw new GooglePlacesError(`Google Place Details request failed with status ${response.status}.`, response.status, responseBody);
-  }
+  const response = await fetchGoogleResponse(
+    `${GOOGLE_PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`,
+    {
+      method: "GET",
+      headers: { "X-Goog-Api-Key": googlePlacesApiKey, "X-Goog-FieldMask": DETAILS_FIELD_MASK },
+      cache: "no-store",
+    },
+    "Google Place Details request",
+  );
   const result = toProviderResult((await response.json()) as GooglePlace, resultPosition);
   if (!result) throw new GooglePlacesError("Google Place Details response was missing required identity fields.", 502);
   return result;
@@ -139,8 +180,6 @@ export async function searchGooglePlaces(
       if (!placeId || seenThisSearch.has(placeId)) continue;
       seenThisSearch.add(placeId);
 
-      // A new discovery search never returns a Google Place ID that TEQQI OS
-      // has already returned in a previous discovery search.
       if (excludedPlaceIds.has(placeId)) continue;
 
       const normalized = toProviderResult(place, newPlaces.size + 1);
