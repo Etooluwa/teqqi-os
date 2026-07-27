@@ -107,11 +107,12 @@ export async function POST(request: Request) {
   } catch (error) {
     if (searchId) {
       try {
+        const providerTemporarilyLimited = error instanceof GooglePlacesError && (error.status === 429 || error.status === 503);
         await finalizeSearchExecution({
           searchId,
           status: "FAILED",
           resultCount: 0,
-          errorCode: error instanceof GooglePlacesError && error.status === 429 ? "GOOGLE_PLACES_RATE_LIMITED" : error instanceof GooglePlacesError ? "GOOGLE_PLACES_ERROR" : "SEARCH_ERROR",
+          errorCode: providerTemporarilyLimited ? "GOOGLE_PLACES_RATE_LIMITED" : error instanceof GooglePlacesError ? "GOOGLE_PLACES_ERROR" : "SEARCH_ERROR",
           errorMessage: error instanceof Error ? error.message : "Business search failed.",
         });
       } catch (finalizeError) {
