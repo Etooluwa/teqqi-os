@@ -36,6 +36,27 @@ export async function getPreviouslyDiscoveredPlaceIds(): Promise<Set<string>> {
   return new Set(rows.map((row) => row.external_id));
 }
 
+export async function findRecentCompletedSearch(
+  input: BusinessSearchInput,
+  maxAgeMs: number,
+): Promise<SearchHistoryRow | null> {
+  const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+  const query = new URLSearchParams({
+    normalized_industry: `eq.${normalizeSearchValue(input.industry)}`,
+    normalized_location: `eq.${normalizeSearchValue(input.location)}`,
+    requested_max_results: `eq.${input.maxResults}`,
+    source: "eq.GOOGLE_PLACES",
+    status: "eq.COMPLETED",
+    created_at: `gte.${cutoff}`,
+    select: "id,query_text,industry,location_text,normalized_industry,normalized_location,requested_max_results,source,status,result_count,created_at",
+    order: "created_at.desc",
+    limit: "1",
+  });
+
+  const rows = await supabaseRest<SearchHistoryRow[]>(`/search_history?${query.toString()}`);
+  return rows[0] ?? null;
+}
+
 export async function createSearchExecution(
   input: BusinessSearchInput,
   query: string,
