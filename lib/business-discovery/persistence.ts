@@ -57,6 +57,47 @@ export async function findRecentCompletedSearch(
   return rows[0] ?? null;
 }
 
+export async function findRecentRunningSearch(
+  input: BusinessSearchInput,
+  maxAgeMs: number,
+): Promise<SearchHistoryRow | null> {
+  const cutoff = new Date(Date.now() - Math.max(0, maxAgeMs)).toISOString();
+  const query = new URLSearchParams({
+    normalized_industry: `eq.${normalizeSearchValue(input.industry)}`,
+    normalized_location: `eq.${normalizeSearchValue(input.location)}`,
+    requested_max_results: `eq.${input.maxResults}`,
+    source: "eq.GOOGLE_PLACES",
+    status: "eq.RUNNING",
+    created_at: `gte.${cutoff}`,
+    select: "id,query_text,industry,location_text,normalized_industry,normalized_location,requested_max_results,source,status,result_count,created_at",
+    order: "created_at.desc",
+    limit: "1",
+  });
+
+  const rows = await supabaseRest<SearchHistoryRow[]>(`/search_history?${query.toString()}`);
+  return rows[0] ?? null;
+}
+
+export async function recoverStaleSearchExecutions(maxAgeMs: number): Promise<number> {
+  const cutoff = new Date(Date.now() - Math.max(0, maxAgeMs)).toISOString();
+  const query = new URLSearchParams({
+    status: "eq.RUNNING",
+    created_at: `lt.${cutoff}`,
+    select: "id",
+  });
+  const rows = await supabaseRest<Array<{ id: string }>>(`/search_history?${query.toString()}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: {
+      status: "FAILED",
+      completed_at: new Date().toISOString(),
+      error_code: "STALE_EXECUTION_RECOVERED",
+      error_message: "The search execution was recovered after remaining RUNNING beyond the allowed execution window.",
+    },
+  });
+  return rows.length;
+}
+
 export async function createSearchExecution(
   input: BusinessSearchInput,
   query: string,
