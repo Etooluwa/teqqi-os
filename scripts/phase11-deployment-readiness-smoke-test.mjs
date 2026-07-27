@@ -9,7 +9,7 @@ console.log(`Target app: ${TARGET}\n`);
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const packageLock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
 const envExample = await readFile(new URL("../.env.example", import.meta.url), "utf8");
-const envModule = await readFile(new URL("../lib/env.ts", import.meta.url), "utf8");
+const envModule = await readFile(new URL("../lib/env/server.ts", import.meta.url), "utf8");
 const checklist = await readFile(new URL("../docs/phase11-deployment-checklist.md", import.meta.url), "utf8");
 
 assert(packageJson.dependencies?.next === "16.2.11", "Deployment must use the reviewed Next.js 16.2.11 release.");
