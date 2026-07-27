@@ -1,6 +1,9 @@
 import "server-only";
 
 import { supabaseRest } from "@/lib/supabase/server";
+import { WEBSITE_ANALYZER_VERSION } from "@/lib/website-analyzer/version";
+import { SCORING_MODEL_VERSION } from "@/lib/website-scoring/config";
+import { OPPORTUNITY_ENGINE_VERSION } from "./config";
 import type { WebsiteOpportunity, WebsiteOpportunityEngineResult } from "./types";
 
 type PersistOpportunityRunInput = {
@@ -55,6 +58,37 @@ type OpportunityRow = {
   scoring_model_version: string;
   created_at: string;
 };
+
+function canonicalDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+export async function findReusableWebsiteOpportunityRun(
+  rawUrl: string,
+  maxAgeMs: number,
+): Promise<OpportunityRunRow | null> {
+  const domain = canonicalDomain(rawUrl);
+  if (!domain || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return null;
+
+  const cutoff = Date.now() - maxAgeMs;
+  const rows = await supabaseRest<OpportunityRunRow[]>(
+    "/website_opportunity_runs?status=eq.COMPLETED&select=*&order=created_at.desc&limit=1000",
+  );
+
+  return rows.find((row) => {
+    const createdAt = Date.parse(row.created_at);
+    return Number.isFinite(createdAt)
+      && createdAt >= cutoff
+      && canonicalDomain(row.final_url) === domain
+      && row.analyzer_version === WEBSITE_ANALYZER_VERSION
+      && row.scoring_model_version === SCORING_MODEL_VERSION
+      && row.opportunity_engine_version === OPPORTUNITY_ENGINE_VERSION;
+  }) ?? null;
+}
 
 function opportunityPayload(runId: string, opportunity: WebsiteOpportunity) {
   return {
