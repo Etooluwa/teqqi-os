@@ -72,6 +72,7 @@ export type DashboardSearchSummary = {
   industry: string;
   location: string;
   status: string;
+  requestedMaxResults: number;
   resultCount: number;
   createdAt: string;
 };
