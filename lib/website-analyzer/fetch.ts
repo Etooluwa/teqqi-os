@@ -1,5 +1,6 @@
 import "server-only";
 
+import { retryDelayMs, waitForRetry } from "@/lib/reliability/rate-limit";
 import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import type { HtmlFetchResult, RedirectHop, ValidatedWebsiteTarget } from "@/lib/website-analyzer/types";
 import { validateWebsiteUrl } from "@/lib/website-analyzer/url";
@@ -9,6 +10,7 @@ const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 2_000_000;
 const USER_AGENT = "TEQQI-OS-Website-Analyzer/1.0 (+https://theteqqi.com)";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const TARGET_RATE_LIMIT_POLICY = { maxRetries: 1, baseDelayMs: 1_000, maxDelayMs: 5_000 } as const;
 
 async function readBodyWithLimit(response: Response): Promise<{ html: string; byteLength: number }> {
   if (!response.body) return { html: "", byteLength: 0 };
@@ -50,7 +52,7 @@ async function readBodyWithLimit(response: Response): Promise<{ html: string; by
   };
 }
 
-async function fetchOnce(url: string): Promise<Response> {
+async function fetchNetworkResponse(url: string): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -72,6 +74,27 @@ async function fetchOnce(url: string): Promise<Response> {
     throw new WebsiteAnalyzerError("FETCH_NETWORK_ERROR", "Website request could not be completed.", 502);
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function fetchOnce(url: string): Promise<Response> {
+  for (let retryIndex = 0; ; retryIndex += 1) {
+    const response = await fetchNetworkResponse(url);
+    if (response.status !== 429) return response;
+
+    const retryAfterHeader = response.headers.get("retry-after");
+    if (retryIndex < TARGET_RATE_LIMIT_POLICY.maxRetries) {
+      await response.body?.cancel().catch(() => undefined);
+      await waitForRetry(retryDelayMs(retryIndex, retryAfterHeader, TARGET_RATE_LIMIT_POLICY));
+      continue;
+    }
+
+    await response.body?.cancel().catch(() => undefined);
+    throw new WebsiteAnalyzerError(
+      "FETCH_RATE_LIMITED",
+      "The website temporarily rate-limited the analyzer. Try the audit again later.",
+      503,
+    );
   }
 }
 
