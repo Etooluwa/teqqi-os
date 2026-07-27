@@ -1,5 +1,3 @@
-import "server-only";
-
 const DEFAULT_BASE_DELAY_MS = 500;
 const DEFAULT_MAX_DELAY_MS = 5_000;
 
