@@ -4,17 +4,22 @@ import { WebsiteAnalyzerError } from "@/lib/website-analyzer/errors";
 import { prepareWebsiteAnalysis } from "@/lib/website-analyzer/service";
 import type { AnalyzerFinding } from "@/lib/website-analyzer/types";
 import { WebsiteOpportunityError } from "@/lib/website-opportunities/detection";
-import { persistWebsiteOpportunityRun } from "@/lib/website-opportunities/persistence";
+import {
+  findReusableWebsiteOpportunityRun,
+  persistWebsiteOpportunityRun,
+} from "@/lib/website-opportunities/persistence";
 import { generateWebsiteOpportunities } from "@/lib/website-opportunities/service";
 import type { OpportunityFindingInput } from "@/lib/website-opportunities/types";
-import { persistWebsiteScoringRun } from "@/lib/website-scoring/persistence";
+import { getWebsiteScoringRun, persistWebsiteScoringRun } from "@/lib/website-scoring/persistence";
 import { WebsiteScoringError } from "@/lib/website-scoring/rule-score";
 import { scoreWebsite, type WebsiteScoringInput } from "@/lib/website-scoring/service";
 import type { ScorableFinding, ScoringCategory } from "@/lib/website-scoring/types";
 
 export const runtime = "nodejs";
 
-type OpportunityRequest = { url: string };
+const WEBSITE_AUDIT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type OpportunityRequest = { url: string; forceRefresh?: boolean };
 
 function invalidRequest(message: string) {
   return NextResponse.json(
@@ -57,6 +62,45 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (body.forceRefresh !== true) {
+      const cachedOpportunityRun = await findReusableWebsiteOpportunityRun(
+        body.url,
+        WEBSITE_AUDIT_CACHE_TTL_MS,
+      );
+
+      if (cachedOpportunityRun) {
+        const cachedScoringRun = await getWebsiteScoringRun(cachedOpportunityRun.scoring_run_id);
+        if (cachedScoringRun) {
+          const scoring = cachedScoringRun.run.explanation;
+          return NextResponse.json({
+            ok: true,
+            opportunityRunId: cachedOpportunityRun.id,
+            scoringRunId: cachedOpportunityRun.scoring_run_id,
+            websiteId: cachedOpportunityRun.website_id,
+            analyzerVersion: cachedOpportunityRun.analyzer_version,
+            requestedUrl: body.url,
+            finalUrl: cachedOpportunityRun.final_url,
+            scoring: {
+              websiteScore: scoring.websiteScore,
+              scoringModelVersion: scoring.scoringModelVersion,
+              criticalFailureCount: scoring.criticalFailureCount,
+            },
+            opportunityResult: cachedOpportunityRun.result,
+            persistence: {
+              stored: false,
+              historicalResultImmutable: true,
+            },
+            cache: {
+              hit: true,
+              ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
+              createdAt: cachedOpportunityRun.created_at,
+              versionCompatible: true,
+            },
+          });
+        }
+      }
+    }
+
     const analysis = await prepareWebsiteAnalysis(body.url);
     const allFindings = [
       ...analysis.technicalHealthFindings,
@@ -123,6 +167,11 @@ export async function POST(request: Request) {
       persistence: {
         stored: true,
         historicalResultImmutable: true,
+      },
+      cache: {
+        hit: false,
+        ttlMs: WEBSITE_AUDIT_CACHE_TTL_MS,
+        forceRefresh: body.forceRefresh === true,
       },
     });
   } catch (error) {
