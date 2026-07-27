@@ -111,7 +111,7 @@ export async function POST(request: Request) {
           searchId,
           status: "FAILED",
           resultCount: 0,
-          errorCode: error instanceof GooglePlacesError ? "GOOGLE_PLACES_ERROR" : "SEARCH_ERROR",
+          errorCode: error instanceof GooglePlacesError && error.status === 429 ? "GOOGLE_PLACES_RATE_LIMITED" : error instanceof GooglePlacesError ? "GOOGLE_PLACES_ERROR" : "SEARCH_ERROR",
           errorMessage: error instanceof Error ? error.message : "Business search failed.",
         });
       } catch (finalizeError) {
@@ -120,10 +120,32 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof GooglePlacesError) {
-      console.error("Google Places search failed", { status: error.status, responseBody: error.responseBody });
+      const rateLimited = error.status === 429 || error.status === 503;
+      const retryAfterSeconds = error.retryAfterMs == null ? null : Math.max(1, Math.ceil(error.retryAfterMs / 1_000));
+      console.error("Google Places search failed", {
+        status: error.status,
+        rateLimited,
+        retryAfterMs: error.retryAfterMs ?? null,
+        responseBody: error.responseBody,
+      });
+
       return NextResponse.json(
-        { ok: false, searchId, error: { code: "GOOGLE_PLACES_ERROR", message: "Business search provider request failed." } },
-        { status: 502 },
+        {
+          ok: false,
+          searchId,
+          error: {
+            code: rateLimited ? "GOOGLE_PLACES_RATE_LIMITED" : "GOOGLE_PLACES_ERROR",
+            message: rateLimited
+              ? "Google Places is temporarily rate-limited. Try the search again shortly."
+              : "Business search provider request failed.",
+            retryable: rateLimited,
+            retryAfterSeconds,
+          },
+        },
+        {
+          status: rateLimited ? 503 : 502,
+          headers: retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : undefined,
+        },
       );
     }
 
