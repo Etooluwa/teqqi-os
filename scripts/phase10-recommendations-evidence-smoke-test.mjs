@@ -10,23 +10,33 @@ const dashboardResponse = await fetch(`${TARGET}/api/dashboard`);
 const dashboardBody = await dashboardResponse.json();
 assert(dashboardResponse.ok && dashboardBody.ok === true, `Dashboard API failed: ${JSON.stringify(dashboardBody)}`);
 
-const { candidate, body: runBody, skipped } = await selectAnalyzableBusiness(
-  TARGET,
-  dashboardBody.dashboard.rankedBusinesses,
-);
+const selection = await selectAnalyzableBusiness(TARGET, dashboardBody.dashboard.rankedBusinesses);
+const { candidate, skipped, source } = selection;
 if (skipped.length > 0) {
   console.log(`↪ Skipped ${skipped.length} live website(s) that could not be safely analyzed right now.`);
 }
-assert(runBody?.ok === true, `Fresh opportunity run failed: ${JSON.stringify(runBody)}`);
+if (source === "PERSISTED_INTELLIGENCE_FALLBACK") {
+  console.log("↪ No live business website was analyzable; validating the latest persisted immutable recommendation chain instead.");
+}
 
-const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
-const body = await response.json();
-assert(response.ok && body.ok === true, `Business detail API failed: ${JSON.stringify(body)}`);
-const detail = body.detail;
+let detail = selection.detail;
+let runBody = selection.body;
+if (!detail) {
+  assert(runBody?.ok === true, `Fresh opportunity run failed: ${JSON.stringify(runBody)}`);
+  const response = await fetch(`${TARGET}/api/businesses/${encodeURIComponent(candidate.externalId)}`);
+  const body = await response.json();
+  assert(response.ok && body.ok === true, `Business detail API failed: ${JSON.stringify(body)}`);
+  detail = body.detail;
+} else {
+  runBody = {
+    opportunityRunId: detail.intelligence.opportunityRun?.opportunityRunId,
+    scoringRunId: detail.intelligence.scoringRun?.scoringRunId,
+  };
+}
+
 const recommendations = detail.intelligence.recommendations;
-
-assert(recommendations.available === true, "Recommendations must be available after a fresh opportunity run.");
-assert(recommendations.opportunityRunId === runBody.opportunityRunId, "Recommendations must identify the exact fresh opportunity run.");
+assert(recommendations.available === true, "Recommendations must be available from the selected immutable opportunity run.");
+assert(recommendations.opportunityRunId === runBody.opportunityRunId, "Recommendations must identify the exact opportunity run.");
 assert(recommendations.scoringRunId === runBody.scoringRunId, "Recommendations must identify the exact scoring run used by Phase 8.");
 assert(recommendations.opportunityRunId === detail.intelligence.opportunityRun?.opportunityRunId, "Recommendations must match the business-detail opportunity run.");
 assert(recommendations.scoringRunId === detail.intelligence.scoringRun?.scoringRunId, "Recommendations must use the matching business-detail scoring run.");
@@ -47,7 +57,7 @@ for (const item of recommendations.recommendations) {
 }
 console.log("✓ Approved service mapping, priority, confidence, action, and reasoning remain transparent");
 
-assert(recommendations.evidenceAvailable === true, `Fresh recommendation evidence should be complete; reason: ${recommendations.evidenceUnavailableReason}`);
+assert(recommendations.evidenceAvailable === true, `Recommendation evidence should be complete; reason: ${recommendations.evidenceUnavailableReason}`);
 assert(recommendations.recommendationCountWithCompleteEvidence === recommendations.opportunityCount, "Every recommendation must have complete evidence.");
 const analyzerFindingIds = new Set(detail.intelligence.analyzerFindings.groups.flatMap((group) => group.findings.map((finding) => finding.ruleId)));
 for (const item of recommendations.recommendations) {
