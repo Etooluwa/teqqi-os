@@ -31,8 +31,17 @@ function numericScore(value: string | number | null | undefined): number | null 
   return Number.isFinite(score) ? score : null;
 }
 
-function toSearchSummary(search: { id: string; query_text: string | null; industry: string; location_text: string; status: string; result_count: number | null; created_at: string }): DashboardSearchSummary {
-  return { id: search.id, query: search.query_text, industry: search.industry, location: search.location_text, status: search.status, resultCount: search.result_count ?? 0, createdAt: search.created_at };
+function toSearchSummary(search: { id: string; query_text: string | null; industry: string; location_text: string; requested_max_results: number; status: string; result_count: number | null; created_at: string }): DashboardSearchSummary {
+  return {
+    id: search.id,
+    query: search.query_text,
+    industry: search.industry,
+    location: search.location_text,
+    status: search.status,
+    requestedMaxResults: search.requested_max_results,
+    resultCount: search.result_count ?? 0,
+    createdAt: search.created_at,
+  };
 }
 
 function bestOpportunity(result: WebsiteOpportunityEngineResult): DashboardBestOpportunity {
