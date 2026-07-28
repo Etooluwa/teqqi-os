@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
+    "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
     "test:phase5": "node scripts/phase5-smoke-test.mjs",
@@ -20,9 +20,14 @@
     "test:phase11:e2e": "node scripts/phase11-end-to-end-smoke-test.mjs",
     "test:phase11:deployment": "node scripts/phase11-deployment-readiness-smoke-test.mjs",
     "test:phase11:release": "node scripts/phase11-mvp-release-smoke-test.mjs",
-    "test:phase11:auto-analysis": "node scripts/phase11-market-auto-analysis-smoke-test.mjs"
+    "test:phase11:auto-analysis": "node scripts/phase11-market-auto-analysis-smoke-test.mjs",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.2",
     "@supabase/supabase-js": "^2.110.7",
     "cheerio": "^1.1.2",
     "next": "16.2.11",
@@ -38,6 +43,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.114.0"
   }
 }
